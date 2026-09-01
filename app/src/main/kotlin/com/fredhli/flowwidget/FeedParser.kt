@@ -4,14 +4,17 @@ import org.json.JSONException
 import org.json.JSONObject
 
 /**
- * One item of the widget feed. `ts` stays a raw ISO string (or null); parsing to a
- * point in time is [RelativeAge]'s job.
+ * One item of the widget feed. `ts` stays a raw ISO string (or null); `epochMs` is the
+ * same instant as absolute epoch milliseconds when the server sent `epoch` (seconds).
+ * Prefer `epochMs`: the naive `ts` hangs on the SERVER's wall clock (European time),
+ * and interpreting it in the phone's zone put "6h ago" six hours wrong on HKT.
  */
 data class FeedItem(
     val id: String,
     val title: String,
     val ts: String?,
     val kind: String,
+    val epochMs: Long? = null,
 )
 
 /** The `/api/flow/widget` payload: the newest batch only. */
@@ -19,13 +22,20 @@ data class Feed(
     val latest: String?,
     val refreshing: Boolean,
     val items: List<FeedItem>,
+    /** `latest` as absolute epoch ms, from the payload's `latest_epoch` (seconds). */
+    val latestEpochMs: Long? = null,
 )
 
 /**
  * Pure parser for the widget GET body. Tolerant by design: missing keys fall back
- * (items -> empty, refreshing -> false, latest/ts -> null, kind -> "headline"),
+ * (items -> empty, refreshing -> false, latest/ts/epoch -> null, kind -> "headline"),
  * extra keys are ignored, and a malformed entry in `items` is skipped rather than
  * failing the whole feed. Only a body that is not a JSON object at all throws.
+ *
+ * `epoch` / `latest_epoch` (absolute seconds) arrived on the server side 2026-09-01,
+ * beside the naive European-local `ts` strings it has always sent — the fix for the
+ * widget's ages being wrong by the server-phone timezone gap. Both are optional here so
+ * an old cached payload (or an old server) still parses; consumers fall back to `ts`.
  */
 object FeedParser {
 
@@ -52,11 +62,17 @@ object FeedParser {
                         title = title,
                         ts = optString(o, "ts"),
                         kind = optString(o, "kind") ?: KIND_HEADLINE,
+                        epochMs = optEpochMs(o, "epoch"),
                     )
                 )
             }
         }
-        return Feed(latest = latest, refreshing = refreshing, items = items)
+        return Feed(
+            latest = latest,
+            refreshing = refreshing,
+            items = items,
+            latestEpochMs = optEpochMs(root, "latest_epoch"),
+        )
     }
 
     /** JSONObject.optString maps null to "null"/""; this maps absent and JSON null to null. */
@@ -64,5 +80,17 @@ object FeedParser {
         if (!o.has(key) || o.isNull(key)) return null
         val v = o.opt(key)
         return v as? String ?: v?.toString()
+    }
+
+    /**
+     * Epoch SECONDS in the payload -> epoch millis, or null. Absent, JSON null, junk and
+     * non-positive values all read as "no epoch" so the naive-ts fallback takes over —
+     * a wrong-by-hours age beats a crash, and 0/negative can only be a server bug.
+     */
+    private fun optEpochMs(o: JSONObject, key: String): Long? {
+        if (!o.has(key) || o.isNull(key)) return null
+        val v = o.optLong(key, Long.MIN_VALUE)
+        if (v <= 0L || v == Long.MIN_VALUE) return null
+        return v * 1000L
     }
 }

@@ -16,8 +16,9 @@ import java.time.temporal.ChronoUnit
  * Timestamps are OFFSETS from the caller's `nowMs`, because the widget derives its age
  * text and staleness from the wall clock at composition time (see `deriveState`). Fixed
  * offsets — not fixed instants — are what make the rendered text stable run to run
- * ("32min ago" stays "32min ago" whenever the screenshot is taken). Stamps are naive-local
- * ISO, the shape the dashboard emits.
+ * ("32min ago" stays "32min ago" whenever the screenshot is taken). Stamps come in both
+ * of the dashboard's shapes since 2026-09-01: naive-local ISO `ts` strings AND absolute
+ * `epoch`/`latest_epoch` seconds, the pair the widget prefers.
  */
 object PreviewFixtures {
 
@@ -79,13 +80,21 @@ object PreviewFixtures {
     /** Deterministic items: id, title, age in minutes behind `now`, kind. */
     data class FixtureItem(val id: String, val title: String, val ageMin: Long, val kind: String)
 
+    /**
+     * Chinese since the device-feedback round: the live feed IS 中文 (flow/FLOW_SPEC.md),
+     * and a gallery of Latin fixtures rendered a typography the widget never shows Fred —
+     * which is how the header/title hierarchy inversion (CJK glyphs render visually
+     * larger) survived to a real device. Realistic FLOW_SPEC-shaped lines, most mixing
+     * CJK with the Latin/digit fragments real batches carry; ids, ages and kinds are
+     * unchanged so the unread/stale assertions hold.
+     */
     val ITEMS = listOf(
-        FixtureItem("fx01", "Overnight batch sealed — 14 headlines, 2 progress notes", 32, "headline"),
-        FixtureItem("fx02", "Smart-beta sleeve drifted 40 bp past its band", 47, "headline"),
-        FixtureItem("fx03", "JHT backfill finished: 128 sessions reconciled", 63, "progress"),
-        FixtureItem("fx04", "Fed minutes: three officials leaned toward a hold", 128, "headline"),
-        FixtureItem("fx05", "Cockpit deploy went green in 41 s", 190, "progress"),
-        FixtureItem("fx06", "AUD hedging note refreshed for the September roll", 300, "headline"),
+        FixtureItem("fx01", "彭博 500 指数九月重构纳入十只新股，9 月 10 日开盘前生效", 32, "headline"),
+        FixtureItem("fx02", "美联储九月按兵不动预期升温，两年期美债收益率回落", 47, "headline"),
+        FixtureItem("fx03", "JHT 夜间抓取完成：128 个会话已对账，无 70 分以上新帖", 63, "progress"),
+        FixtureItem("fx04", "日元套息交易再度平仓，动量因子单日回撤 1.8%", 128, "headline"),
+        FixtureItem("fx05", "Cockpit 部署 41 秒转绿，WSL 入口连续运行 96 小时", 190, "progress"),
+        FixtureItem("fx06", "新加坡 EP 薪资门槛明年一月上调，指数编制岗不受影响", 300, "headline"),
     )
 
     /**
@@ -127,10 +136,17 @@ object PreviewFixtures {
             .truncatedTo(ChronoUnit.SECONDS)
             .toString()
 
+    /** The same instant as absolute epoch SECONDS — the shape the server's `epoch` carries. */
+    fun epochAgo(nowMs: Long, ageMin: Long): Long = (nowMs - ageMin * 60_000L) / 1000L
+
     /**
      * The fixture feed body: [ITEMS] shifted [extraAgeMin] further into the past,
      * `latest` = the newest item's stamp. JSON built by hand so this stays dependency-free;
      * FeedParserTest-style tests confirm it round-trips through the real parser.
+     *
+     * Carries `epoch` / `latest_epoch` beside the naive stamps, exactly like the live
+     * server since 2026-09-01 — so every gallery frame renders through the code path the
+     * phone actually takes (the widget prefers epoch; the naive `ts` is the fallback).
      */
     fun feedJson(
         nowMs: Long,
@@ -141,10 +157,11 @@ object PreviewFixtures {
         source: List<FixtureItem> = ITEMS,
     ): String {
         val latest = stampAgo(nowMs, FRESH_AGE_MIN + extraAgeMin, zone)
+        val latestEpoch = epochAgo(nowMs, FRESH_AGE_MIN + extraAgeMin)
         val items = if (empty) "" else source.joinToString(",") {
-            """{"id":"${it.id}","title":"${it.title.replace("\"", "\\\"")}","ts":"${stampAgo(nowMs, it.ageMin + extraAgeMin, zone)}","kind":"${it.kind}"}"""
+            """{"id":"${it.id}","title":"${it.title.replace("\"", "\\\"")}","ts":"${stampAgo(nowMs, it.ageMin + extraAgeMin, zone)}","epoch":${epochAgo(nowMs, it.ageMin + extraAgeMin)},"kind":"${it.kind}"}"""
         }
-        return """{"latest":${if (empty) "null" else "\"$latest\""},"refreshing":$refreshing,"items":[$items]}"""
+        return """{"latest":${if (empty) "null" else "\"$latest\""},"latest_epoch":${if (empty) "null" else "$latestEpoch"},"refreshing":$refreshing,"items":[$items]}"""
     }
 
     /**

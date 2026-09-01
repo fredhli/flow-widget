@@ -26,22 +26,14 @@ import kotlinx.coroutines.runBlocking
  */
 class ConfigActivity : Activity() {
 
-    private companion object {
-        /**
-         * The slider is one notch per glass level, not one per percent. The surface is a
-         * drawable resource so it can follow a system theme flip (GlassSurface's header),
-         * which means the opacity lands on one of GlassSurface.LEVELS steps — 3% apart,
-         * hitting the 74% default exactly, and far too fine to see a notch.
-         */
-        const val OPACITY_STEPS = GlassSurface.LEVELS - 1
-    }
-
     private var appWidgetId = AppWidgetManager.INVALID_APPWIDGET_ID
 
     private lateinit var baseField: EditText
     private lateinit var tokenField: EditText
-    private lateinit var opacityBar: SeekBar
-    private lateinit var opacityValue: TextView
+    private lateinit var lightBar: SeekBar
+    private lateinit var lightValue: TextView
+    private lateinit var darkBar: SeekBar
+    private lateinit var darkValue: TextView
     private lateinit var errorView: TextView
     private lateinit var saveButton: Button
     private lateinit var saveAnywayButton: Button
@@ -58,8 +50,10 @@ class ConfigActivity : Activity() {
         setContentView(R.layout.activity_config)
         baseField = findViewById(R.id.base_url)
         tokenField = findViewById(R.id.token)
-        opacityBar = findViewById(R.id.opacity)
-        opacityValue = findViewById(R.id.opacity_value)
+        lightBar = findViewById(R.id.opacity_light)
+        lightValue = findViewById(R.id.opacity_value_light)
+        darkBar = findViewById(R.id.opacity_dark)
+        darkValue = findViewById(R.id.opacity_value_dark)
         errorView = findViewById(R.id.error)
         saveButton = findViewById(R.id.save)
         saveAnywayButton = findViewById(R.id.save_anyway)
@@ -68,21 +62,52 @@ class ConfigActivity : Activity() {
         baseField.setText(prefs[FlowStore.KEY_BASE_URL] ?: FlowStore.DEFAULT_BASE_URL)
         prefs[FlowStore.KEY_TOKEN]?.let { tokenField.setText(it) }
 
-        // Background opacity: one SeekBar notch per glass level (min is API 26+ only as an
-        // XML attr on some OEM skins, so 0..steps in code is the portable way).
-        opacityBar.max = OPACITY_STEPS
-        opacityBar.progress = GlassSurface.levelFor(prefs[FlowStore.KEY_BG_OPACITY])
-        showOpacity(opacityBar.progress)
-        opacityBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(bar: SeekBar?, progress: Int, fromUser: Boolean) {
-                showOpacity(progress)
-            }
-            override fun onStartTrackingTouch(bar: SeekBar?) {}
-            override fun onStopTrackingTouch(bar: SeekBar?) {}
-        })
+        // Two sliders since the device-feedback round: light and dark are genuinely
+        // different surfaces and Fred wanted them tuned apart — dark all the way down to
+        // 30% (his wallpaper, his slider; the floor is the only guard). One SeekBar notch
+        // per glass level of the theme's own grid (light 16 x 3%, dark 66 x 1% — see
+        // GlassSurface), set in code because android:min is unreliable across OEM skins.
+        // Reading KEY_BG_OPACITY (the old single slider's key) into the LIGHT bar is the
+        // whole migration: an existing value becomes light, dark starts at its default.
+        bindOpacityBar(
+            lightBar, lightValue,
+            GlassSurface.LIGHT_LEVELS,
+            GlassSurface.lightLevelFor(prefs[FlowStore.KEY_BG_OPACITY]),
+        ) { GlassSurface.lightOpacityAtLevel(it) }
+        bindOpacityBar(
+            darkBar, darkValue,
+            GlassSurface.DARK_LEVELS,
+            GlassSurface.darkLevelFor(prefs[FlowStore.KEY_BG_OPACITY_DARK]),
+        ) { GlassSurface.darkOpacityAtLevel(it) }
 
         saveButton.setOnClickListener { attempt(requireFetch = true) }
         saveAnywayButton.setOnClickListener { attempt(requireFetch = false) }
+    }
+
+    /** Wire one theme's slider: level grid, stored position, live % readout. */
+    private fun bindOpacityBar(
+        bar: SeekBar,
+        label: TextView,
+        levels: Int,
+        storedLevel: Int,
+        opacityAt: (Int) -> Float,
+    ) {
+        fun show(level: Int) {
+            label.text = getString(
+                R.string.config_opacity_value,
+                (opacityAt(level) * 100).roundToInt(),
+            )
+        }
+        bar.max = levels - 1
+        bar.progress = storedLevel
+        show(storedLevel)
+        bar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(b: SeekBar?, progress: Int, fromUser: Boolean) {
+                show(progress)
+            }
+            override fun onStartTrackingTouch(b: SeekBar?) {}
+            override fun onStopTrackingTouch(b: SeekBar?) {}
+        })
     }
 
     private fun attempt(requireFetch: Boolean) {
@@ -106,9 +131,10 @@ class ConfigActivity : Activity() {
 
         setBusy(true)
         val finalBase = base
-        // Read the slider on the UI thread; saved with the config in both paths and
+        // Read both sliders on the UI thread; saved with the config in both paths and
         // applied by the updateAll below — "live on save".
-        val opacity = GlassSurface.opacityAtLevel(opacityBar.progress)
+        val lightOpacity = GlassSurface.lightOpacityAtLevel(lightBar.progress)
+        val darkOpacity = GlassSurface.darkOpacityAtLevel(darkBar.progress)
         Thread {
             try {
                 val store = FlowStore.get(this)
@@ -117,13 +143,13 @@ class ConfigActivity : Activity() {
                     FeedParser.parse(body)
                     runBlocking {
                         store.saveConfig(finalBase, token)
-                        store.saveOpacity(opacity)
+                        store.saveOpacity(lightOpacity, darkOpacity)
                         store.saveFeed(body)
                     }
                 } else {
                     runBlocking {
                         store.saveConfig(finalBase, token)
-                        store.saveOpacity(opacity)
+                        store.saveOpacity(lightOpacity, darkOpacity)
                     }
                     FlowWork.fetchNow(this)
                 }
@@ -140,21 +166,6 @@ class ConfigActivity : Activity() {
                 }
             }
         }.start()
-    }
-
-    /**
-     * Both numbers, because they are genuinely different surfaces. Light theme spans the
-     * brief's 50-95%; dark theme spans 80-95% — its row fill lifts the row *towards* the
-     * light ink instead of away from it, so on a bright wallpaper only the container's own
-     * opacity keeps the text legible (GlassSurface.MIN_OPACITY_DARK). Showing one number
-     * for both would make the slider lie in whichever theme Fred is not looking at.
-     */
-    private fun showOpacity(level: Int) {
-        opacityValue.text = getString(
-            R.string.config_opacity_value,
-            (GlassSurface.opacityAtLevel(level) * 100).roundToInt(),
-            (GlassSurface.darkOpacityAtLevel(level) * 100).roundToInt(),
-        )
     }
 
     private fun setBusy(busy: Boolean) {

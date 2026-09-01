@@ -57,7 +57,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:text="@string/config_opacity_label"
+            android:text="@string/config_opacity_label_light"
             android:textSize="14sp"
             android:textStyle="bold" />
 
@@ -69,16 +69,47 @@
             android:orientation="horizontal">
 
             <SeekBar
-                android:id="@+id/opacity"
+                android:id="@+id/opacity_light"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:max="15" />
 
             <TextView
-                android:id="@+id/opacity_value"
+                android:id="@+id/opacity_value_light"
                 android:layout_width="wrap_content"
-                android:minWidth="88dp"
+                android:minWidth="56dp"
+                android:layout_height="wrap_content"
+                android:gravity="end"
+                android:textSize="14sp" />
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="@string/config_opacity_label_dark"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <SeekBar
+                android:id="@+id/opacity_dark"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:max="65" />
+
+            <TextView
+                android:id="@+id/opacity_value_dark"
+                android:layout_width="wrap_content"
+                android:minWidth="56dp"
                 android:layout_height="wrap_content"
                 android:gravity="end"
                 android:textSize="14sp" />

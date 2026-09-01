@@ -191,15 +191,71 @@ class DeriveStateTest {
     // ---------------------------------------------------------------- glass opacity
 
     @Test
-    fun `no stored opacity paints at the default`() {
-        assertEquals(GlassSurface.DEFAULT_OPACITY, deriveState(prefs(), now).bgOpacity, 1e-6f)
+    fun `no stored opacity paints both themes at their defaults`() {
+        val s = deriveState(prefs(), now)
+        assertEquals(GlassSurface.DEFAULT_OPACITY, s.bgOpacityLight, 1e-6f)
+        assertEquals(GlassSurface.DEFAULT_OPACITY_DARK, s.bgOpacityDark, 1e-6f)
     }
 
     @Test
-    fun `a stored opacity is honoured and a wild one is clamped`() {
-        val stored = deriveState(prefs { this[FlowStore.KEY_BG_OPACITY] = 0.62f }, now)
-        assertEquals(0.62f, stored.bgOpacity, 1e-6f)
-        val wild = deriveState(prefs { this[FlowStore.KEY_BG_OPACITY] = 3f }, now)
-        assertEquals(GlassSurface.MAX_OPACITY, wild.bgOpacity, 1e-6f)
+    fun `stored opacities are honoured per theme and wild ones are clamped`() {
+        val stored = deriveState(
+            prefs {
+                this[FlowStore.KEY_BG_OPACITY] = 0.62f
+                this[FlowStore.KEY_BG_OPACITY_DARK] = 0.35f
+            },
+            now,
+        )
+        assertEquals(0.62f, stored.bgOpacityLight, 1e-6f)
+        assertEquals(0.35f, stored.bgOpacityDark, 1e-6f)
+        val wild = deriveState(
+            prefs {
+                this[FlowStore.KEY_BG_OPACITY] = 3f
+                this[FlowStore.KEY_BG_OPACITY_DARK] = 0.05f
+            },
+            now,
+        )
+        assertEquals(GlassSurface.MAX_OPACITY, wild.bgOpacityLight, 1e-6f)
+        assertEquals(GlassSurface.MIN_OPACITY_DARK, wild.bgOpacityDark, 1e-6f)
+    }
+
+    @Test
+    fun `a pre-split single stored value migrates to light and dark takes its default`() {
+        // The upgrade path: the old one-slider install has only KEY_BG_OPACITY. That
+        // value becomes the light opacity untouched; dark starts at its own default.
+        val s = deriveState(prefs { this[FlowStore.KEY_BG_OPACITY] = 0.53f }, now)
+        assertEquals(0.53f, s.bgOpacityLight, 1e-6f)
+        assertEquals(GlassSurface.DEFAULT_OPACITY_DARK, s.bgOpacityDark, 1e-6f)
+    }
+
+    // ---------------------------------------------------------------- epoch vs naive ts
+
+    /**
+     * The device-feedback round's timestamp fix. The server stamps naive EUROPEAN-local
+     * strings; the phone lives on HKT. Parsing the string in the phone's zone made every
+     * age wrong by the offset — the report's exact case: a batch generated 18:19 Europe
+     * (epoch 1788279540 = 00:19 HKT) rendered as if it had landed 18:19 HKT, six hours
+     * older than it was. With `latest_epoch` present the age must come from it, whatever
+     * zone this test happens to run in.
+     */
+    @Test
+    fun `latest_epoch wins over the naive latest string`() {
+        val epoch = 1_788_279_540L // 2026-09-01T18:19 Europe/Paris == 2026-09-02T00:19 HKT
+        val body = """{"latest":"2026-09-01T18:19:00","latest_epoch":$epoch,""" +
+            """"refreshing":false,"items":[]}"""
+        // One hour after the batch, wherever the test runs: the age must be 1h.
+        val oneHourLater = (epoch + 3_600) * 1000L
+        val s = deriveState(prefs { this[FlowStore.KEY_FEED_JSON] = body }, oneHourLater)
+        assertEquals("1h ago", s.ageText)
+        assertFalse(s.stale)
+    }
+
+    @Test
+    fun `without latest_epoch the naive latest still parses as before`() {
+        // The fallback for a payload cached before the server carried epochs: feedJson()
+        // above emits no latest_epoch, and its stamps hang off the test JVM's own zone,
+        // so the derived age matches the naive string — the pre-fix behaviour, kept.
+        val s = deriveState(prefs { this[FlowStore.KEY_FEED_JSON] = feedJson(10 * 60_000) }, now)
+        assertEquals("10min ago", s.ageText)
     }
 }

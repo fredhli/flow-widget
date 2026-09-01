@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Overrides glance-appwidget's EMPTY placeholder style of the same name (verified
+         against glance-appwidget-1.1.1.aar: `<style name="Glance.AppWidget.List"
+         parent=""/>`, referenced as style="@style/Glance.AppWidget.List" by every
+         glance_list*.xml layout the LazyColumn translates to). App resources win the
+         merge, and RemoteViews inflate with THIS package's resources inside the
+         launcher, so the widget's ListView picks it up at inflate time.
+
+         Why: the list's vertical scrollbar drew on top of the feed rows' right edge
+         (round 2 device feedback #5 — Fred's red-box screenshot). RemoteViews exposes no
+         setter for it and Glance no modifier, so the honest options were this style hook
+         or a reserved gutter; the hook actually removes the bar instead of budgeting
+         pixels around it. Failure mode is safe: if a Glance upgrade renames the style,
+         this override goes inert and the scrollbar comes back — visible in the first
+         gallery run, not a crash.
+
+         tools:override marks the shadowing of the library's private style as deliberate
+         (silences PrivateResource); UnusedResources is a false positive — no app code
+         references the style, the glance layouts do, across a boundary lint cannot see. -->
+    <style name="Glance.AppWidget.List" parent="" tools:override="true"
+        tools:ignore="UnusedResources">
+        <item name="android:scrollbars">none</item>
+    </style>
+</resources>

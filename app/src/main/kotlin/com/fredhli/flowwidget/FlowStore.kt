@@ -50,9 +50,12 @@ class FlowStore private constructor(private val appContext: Context) {
         appContext.flowDataStore.edit { it[KEY_FETCH_OK] = false }
     }
 
-    /** The config screen's opacity slider: the glass surface's overall alpha. */
-    suspend fun saveOpacity(fraction: Float) {
-        appContext.flowDataStore.edit { it[KEY_BG_OPACITY] = GlassSurface.clampOpacity(fraction) }
+    /** The config screen's two opacity sliders: one glass alpha per theme. */
+    suspend fun saveOpacity(light: Float, dark: Float) {
+        appContext.flowDataStore.edit {
+            it[KEY_BG_OPACITY] = GlassSurface.clampLight(light)
+            it[KEY_BG_OPACITY_DARK] = GlassSurface.clampDark(dark)
+        }
     }
 
     /** The widget's list was tapped: everything up to now counts as read. */
@@ -74,8 +77,16 @@ class FlowStore private constructor(private val appContext: Context) {
         // feed body is the whole updating state. Any stale values left in an upgraded
         // install's DataStore are simply never read.
 
-        /** Glass-surface opacity (GlassSurface.MIN..MAX); absent -> the default. */
+        /**
+         * Light-theme glass opacity (GlassSurface.MIN_OPACITY..MAX); absent -> the
+         * default. This is the key the single pre-split slider wrote, which is exactly
+         * the migration design/BRIEF.md's round-2 device feedback asks for: an existing
+         * stored value simply *becomes* the light value, and dark starts at its default.
+         */
         val KEY_BG_OPACITY = floatPreferencesKey("bg_opacity")
+
+        /** Dark-theme glass opacity (GlassSurface.MIN_OPACITY_DARK..MAX); absent -> default. */
+        val KEY_BG_OPACITY_DARK = floatPreferencesKey("bg_opacity_dark")
 
         const val DEFAULT_BASE_URL = "https://dashboard.fredhli.com"
 

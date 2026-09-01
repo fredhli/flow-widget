@@ -44,7 +44,7 @@ something the plan did not predict.
 | 2 | The 4×2 bucket renders one item row, not three | `still open — the round made it wider, not denser` |
 | 3 | A one-line title makes a ~35 dp item row at 4×2 | `fixed in round 2 — measured 48.0 dp` |
 | 4 | §3's title line-height 1.35 cannot be expressed in Glance | `still open — struck from the spec; the escape hatch costs the composable` |
-| 5 | The opacity slider is quantised, not continuous | `still open — the price of a surface that survives a theme flip` |
+| 5 | The opacity slider is quantised, not continuous | `still open — light 16×3%; dark is 66×1% since the device-feedback round, indistinguishable from continuous` |
 
 ---
 
@@ -265,6 +265,8 @@ row padding) and say so. Round 2 did neither: it struck the number and left the 
 
 **Status**: `still open — the price of a surface that survives a system theme flip. Round 2
 took the declarative option; the continuous one is still available and is Fred's call.`
+*(Re-graded in the dated sub-heading at the end of this entry: the device-feedback round
+made the dark slider 66×1% — effectively continuous — and light is unchanged at 16×3%.)*
 
 `design/BRIEF.md` specified a continuous 0.50 → 0.95 slider. What ships is 16 steps of 3%.
 The reason is not laziness: round 1's container gradient was a **bitmap baked at composition
@@ -285,6 +287,19 @@ both the apply-time theme *and* a continuous float, at the cost of leaving Glanc
 background layer and of the theme-aware dark floor no longer being expressible in the
 resource (it would have to come back as a composition-time number, which is the class of
 thing that went stale in the first place). Verified reachable, not attempted.
+
+### Re-graded 2026-09-01 (round 2, device feedback): mostly moot
+
+The device-feedback round split the opacity into two sliders (`design/BRIEF.md`, its #1),
+which changed the resource scheme under this entry: two stacked per-theme drawable
+families instead of one paired family. That freed each grid to be sized on its own, and
+**dark is now 66 levels of 1%** — the only uniform step landing its 0.30 floor, 0.74
+default and 0.95 ceiling all on-grid — which is finer than a finger can place a SeekBar
+on that range. Light keeps 16 levels of 3%, so this entry is literally still true there
+and the escape hatch above is still the route to a continuous float, but the visible gap
+between "16 steps" and "continuous" was already below the eye's threshold and the dark
+half is now below the finger's. Status stays `still open` on the letter of the brief;
+nobody should spend a round on it.
 
 ---
 

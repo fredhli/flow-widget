@@ -73,20 +73,21 @@ only. Clearing this folder by hand to "re-publish it clean" throws `design/` awa
      This is the same secret the dashboard's API uses. It is stored on the phone only, in
      the app's private DataStore — it is not in the APK and never leaves the device except
      as an `Authorization: Bearer` header to your own dashboard.
-   - **Opacity** — how solid the widget's surface is, and so how much wallpaper shows
-     through it. It starts at **74%**, which suits most wallpapers; drag it *up* on a busy
-     or bright one, *down* for more glass. It changes only the background — the rows keep
-     their own fill, so the titles stay readable wherever you leave it. Nothing about the
-     feed changes.
-     - The readout shows **two** numbers, `74% / 88%`: light theme and dark. They are
-       genuinely different surfaces. The rows' fill is white in both themes, which lifts a
-       row *away* from dark text but *towards* light text — so in dark mode the background
-       itself is what keeps a bright wallpaper off the titles, and it never goes below 80%.
-       One drag moves both; the slider spans 50–95% in light and 80–95% in dark.
-     - It moves in 16 notches rather than smoothly. That is the cost of the background
-       being a theme-aware drawable instead of a picture painted at draw time — which is
-       what makes it flip correctly when the phone switches to dark mode. Neighbouring
-       notches are 3% apart; you will not see the step.
+   - **Two opacity sliders** — "Background opacity — Light" and "— Dark", each with its
+     own live % readout, each controlling how solid that theme's surface is over the
+     wallpaper. Both start at **74%**. Light spans **50–95%**; dark spans **30–95%** —
+     you asked for dark to go properly low, and it now does: at the bottom the night
+     surface is mostly wallpaper. The trade is yours to make per wallpaper: light text
+     over a translucent dark surface washes out on a bright wallpaper (that is why the
+     old build refused to go below 80% in dark), so if titles fade after a wallpaper
+     change, drag the dark slider back up. The rows keep their own fixed fill either way,
+     and nothing about the feed changes.
+     - If you had set the old single slider, its value carries over as the **light**
+       value; dark starts at 74%.
+     - The sliders move in notches (3% apart in light, 1% in dark) rather than smoothly —
+       the cost of the background being a theme-aware drawable instead of a picture
+       painted at draw time, which is what makes it flip correctly when the phone
+       switches to dark mode. You will not see the steps.
    Save. The widget fetches immediately.
 
 **Updating later**: install the new APK over the old one the same way. The config and the
@@ -100,8 +101,8 @@ widget → Remove is not enough; go to Settings → Apps → Flow → Uninstall)
 
 | You see | It means |
 |---|---|
-| **The wallpaper, faintly, through the widget** | By design. The surface is a soft grey → blue → grey gradient at 74% opacity in light and 88% in dark (both adjustable, see above), not a solid card. It is *not* frosted glass: a third-party widget cannot blur what is behind it — only the launcher can, which is why Bixby can and this cannot. Legibility comes from the rows' own fill in light mode, and from the surface's own density in dark, where a white row fill would push the row towards the light text rather than away from it. |
-| **Flow … 32min ago** | The newest batch landed 32 minutes ago. The age sits at the right end of the header band, always as a whole unit — `32min ago`, `3h ago`, `1d ago`, `just now` — never a clock time and never a fraction. |
+| **The wallpaper, faintly, through the widget** | By design. The surface is a soft grey → blue → grey gradient in light and a deep navy → violet one in dark, each at its own slider's opacity (74% default, see above), not a solid card. It is *not* frosted glass: a third-party widget cannot blur what is behind it — only the launcher can, which is why Bixby can and this cannot. Legibility comes from the rows' own fill in light mode, and from the surface's own density in dark, where a white row fill would push the row towards the light text rather than away from it — which is also why the dark slider is the one to raise if a bright wallpaper washes the titles. |
+| **Flow … 32min ago** | The newest batch landed 32 minutes ago — computed from the server's absolute `epoch` stamp since 2026-09-01, so it is right in the phone's own timezone (the old build parsed the server's naive European-local string and ran hours off on HKT). The age sits at the right end of the header band, always as a whole unit — `32min ago`, `3h ago`, `1d ago`, `just now` — never a clock time and never a fraction. |
 | **`updating…` where the age normally is** | A run is in flight, started from the Flow page on the web. The widget has no refresh button of its own (see **Taps**), so this is the only way it appears; it reverts to the age when the run lands. |
 | **A small dot beside a title** | That item arrived since you last tapped the list. Tapping any item clears the dots. |
 | **Grey titles** | The newest batch is more than 24 hours old. Nothing is broken; nothing is new either. The same rule greys the web page. |
@@ -166,16 +167,26 @@ screenshots/redesign-r1/gallery/    the first redesign's 24 frames
 screenshots/redesign-r1/collages/   6 per-state sheets + overview.png (baseline | r1)
 screenshots/redesign-r1/evidence/   the opacity slider at 50% and 95%, the widget at
                                     50/74/95%, and the header's hour-magnitude ago label
-screenshots/redesign-r2/gallery/    the current 36 frames — r1's six states plus
-                                    updating, empty and unreachable
+screenshots/redesign-r2/gallery/    36 frames — r1's six states plus updating, empty
+                                    and unreachable
 screenshots/redesign-r2/collages/   per-state sheets + overview.png (r1 | r2)
 screenshots/redesign-r2/evidence/   the one-line-title row that sets the 48 dp floor, and
                                     the dark opacity ladder the r1 ladder never drew
+screenshots/redesign-r3/gallery/    the current 36 frames — the device-feedback round:
+                                    Chinese fixture titles, 17sp header, the panel-D dark
+                                    surface, no list scrollbar
+screenshots/redesign-r3/collages/   per-state sheets + overview.png (r2 | r3)
+screenshots/redesign-r3/evidence/   both sliders' extremes (light 50/95%, dark 30/95% —
+                                    the 30% frame over Fred's bright wallpaper is the
+                                    trade he accepted, in pixels), the two-slider config
+                                    screen, the mid-scroll no-scrollbar frame
 ```
 
 Every one of round 1's 24 pairs reads `DIFF 84–88% PX` — that redesign changed every state,
-which was the point. Round 2's sheets are the smaller, deliberate deltas on top. Where a
-number in this file and a frame disagree, the frame wins.
+which was the point. Round 2's sheets are the smaller, deliberate deltas on top, and round
+3's (the device-feedback round) differ in every frame again — Chinese titles, the bigger
+header and the reworked dark surface touch everything. Where a number in this file and a
+frame disagree, the frame wins.
 
 ---
 
@@ -238,11 +249,13 @@ key, so it still installs over previous versions. `app/`'s
 `proguard-rules.pro` turns obfuscation off, so nothing that looks a class up by name can
 break. `assembleDebug` still works and the sync script falls back to it.
 
-**The 32 `glass_NN.xml` drawables are generated.** `app/src/main/res/drawable/` and
-`drawable-night/` hold one gradient per opacity notch — that pair of directories, resolved
-by the launcher at draw time, is what makes the background follow a system dark-mode flip
-instead of staying on the theme it was drawn in. They are checked in, and
-`tools/gen-glass-drawables.py` is what writes them:
+**The 164 `glass_*.xml` drawables are generated.** `app/src/main/res/drawable/` and
+`drawable-night/` hold one gradient per opacity notch per theme — `glass_light_NN` (16
+levels) and `glass_dark_NN` (66 levels), each family carrying a real gradient in its own
+theme's directory and a fully transparent shape in the other's, so the two stacked layers
+resolve against the launcher's configuration at draw time and the background follows a
+system dark-mode flip instead of staying on the theme it was drawn in. They are checked
+in, and `tools/gen-glass-drawables.py` is what writes them:
 
 ```bash
 tools/gen-glass-drawables.py --check     # "clean" = the files match the generator

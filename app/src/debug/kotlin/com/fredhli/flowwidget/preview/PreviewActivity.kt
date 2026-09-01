@@ -51,9 +51,11 @@ import kotlinx.coroutines.launch
  *   now    epoch ms the fixture offsets hang off (default: current time — offsets are
  *          fixed, so the rendered text is stable either way)
  *   dark   best-effort per-app night mode; the script prefers `cmd uimode night yes|no`
- *   opacity  --ef opacity 0.50 — the glass surface's opacity, so the ladder can be shot
+ *   opacity  --ef opacity 0.50 — the LIGHT glass opacity, so the ladder can be shot
  *          without driving the real config screen through uiautomator. Absent = the
  *          default, which is what a gallery run wants.
+ *   opacity_dark  --ef opacity_dark 0.30 — the DARK glass opacity (its own slider and
+ *          range since the device-feedback round; 0.30 is the floor Fred asked for).
  *   backdrop --es backdrop D7D2D9 — the colour behind the widget, RRGGBB.
  *
  * `backdrop` exists because its default hid a real defect for a whole round. A translucent
@@ -130,10 +132,14 @@ class PreviewActivity : Activity() {
         store.saveFeed(seed.feedJson) // also sets fetch_ok = true
         if (!seed.fetchOk) store.markFetchFailed()
         store.recordOpen(nowMs - seed.lastOpenAgeMin * 60_000L)
-        // Every seeding writes the opacity too, so a ladder run cannot leak its setting
-        // into the next gallery run: absent extra = the shipped default, not "whatever
-        // the previous shot left in the DataStore".
-        store.saveOpacity(intent.getFloatExtra(EXTRA_OPACITY, GlassSurface.DEFAULT_OPACITY))
+        // Every seeding writes both opacities too, so a ladder run cannot leak its
+        // setting into the next gallery run: absent extra = the shipped default, not
+        // "whatever the previous shot left in the DataStore". Two extras since the
+        // device-feedback round split the slider per theme.
+        store.saveOpacity(
+            intent.getFloatExtra(EXTRA_OPACITY, GlassSurface.DEFAULT_OPACITY),
+            intent.getFloatExtra(EXTRA_OPACITY_DARK, GlassSurface.DEFAULT_OPACITY_DARK),
+        )
 
         // 2. Compose the real widget at the exact bucket size. compose() runs the real
         //    provideGlance (fresh DataStore snapshot included) against a fake appwidget
@@ -160,6 +166,15 @@ class PreviewActivity : Activity() {
         host.post {
             val loc = IntArray(2)
             host.getLocationOnScreen(loc)
+            // The scrollbar probe (device feedback #5). The fix is a resource-merge
+            // override of glance-appwidget's empty Glance.AppWidget.List style, applied
+            // when the host inflates the list — so the honest check is the inflated
+            // view's own state, not the style file. The emulator's AOSP skin draws no
+            // visible bar either way (One UI does, which is where Fred saw it), so a
+            // screenshot cannot prove this; the log line can, per frame.
+            findListView(host)?.let {
+                Log.i(TAG, "LIST scrollbars: vertical=${it.isVerticalScrollBarEnabled}")
+            }
             Log.i(
                 TAG,
                 "READY state=$state size=$sizeSpec theme=${themeName(dark)} " +
@@ -182,6 +197,17 @@ class PreviewActivity : Activity() {
             Log.w(TAG, "backdrop '$raw' is not RRGGBB — using the default ground")
         }
         return if (dark) 0xFF17181C.toInt() else 0xFFE9E7EF.toInt()
+    }
+
+    /** Depth-first search for the RemoteViews-inflated list, if this state has one. */
+    private fun findListView(root: android.view.View): android.widget.AbsListView? {
+        if (root is android.widget.AbsListView) return root
+        if (root is android.view.ViewGroup) {
+            for (i in 0 until root.childCount) {
+                findListView(root.getChildAt(i))?.let { return it }
+            }
+        }
+        return null
     }
 
     private fun isNightMode(): Boolean =
@@ -215,6 +241,7 @@ class PreviewActivity : Activity() {
         /** The tag widget-shots.sh greps for. */
         const val TAG = "FlowPreview"
         const val EXTRA_OPACITY = "opacity"
+        const val EXTRA_OPACITY_DARK = "opacity_dark"
         const val EXTRA_BACKDROP = "backdrop"
     }
 }

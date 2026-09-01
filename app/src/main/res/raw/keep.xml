@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The 32 glass_NN drawables are reached only through the R.drawable id table in
-     FlowWidget.kt (GlassLevels) plus the -night resource qualifier, which is exactly the
-     shape `shrinkResources` is conservative about. Keeping them by pattern makes the
-     release build's surface independent of how well the shrinker traces an IntArray. -->
+<!-- The 164 glass_light_NN / glass_dark_NN drawables are reached only through the
+     R.drawable id tables in FlowWidget.kt (GlassLight/GlassDark) plus the -night
+     resource qualifier, which is exactly the shape `shrinkResources` is conservative
+     about. Keeping them by pattern makes the release build's surface independent of how
+     well the shrinker traces an IntArray. -->
 <resources xmlns:tools="http://schemas.android.com/tools"
     tools:keep="@drawable/glass_*" />
