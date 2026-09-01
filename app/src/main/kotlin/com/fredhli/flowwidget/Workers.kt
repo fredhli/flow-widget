@@ -74,6 +74,31 @@ object FlowWork {
                 .build(),
         )
     }
+
+    /* A fetch that lands mid-run caches `refreshing: true`, and the next scheduled look
+     * is up to 30 minutes out — so "updating" would sit on the home screen for half an
+     * hour after the run finished. While the cache says a run is live, re-look every
+     * two minutes until the flag drops or the chain runs out. The cap is generous
+     * against a real run (5-8 min) and finite against a stale flag, though the server
+     * clears its own flag at 10 minutes anyway. */
+    const val REFRESHING_RELOOK = "flow-fetch-refreshing"
+    const val RELOOK_ATTEMPT = "attempt"
+    private const val RELOOK_MINUTES = 2L
+    private const val RELOOK_MAX = 6
+
+    fun relookWhileRefreshing(context: Context, attempt: Int) {
+        if (attempt >= RELOOK_MAX) return
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            REFRESHING_RELOOK,
+            ExistingWorkPolicy.REPLACE,
+            OneTimeWorkRequestBuilder<FetchWorker>()
+                .setInitialDelay(RELOOK_MINUTES, TimeUnit.MINUTES)
+                .setInputData(
+                    androidx.work.Data.Builder().putInt(RELOOK_ATTEMPT, attempt + 1).build(),
+                )
+                .build(),
+        )
+    }
 }
 
 /**
@@ -99,16 +124,23 @@ class FetchWorker(context: Context, params: WorkerParameters) :
     override suspend fun doWork(): Result {
         val store = FlowStore.get(applicationContext)
         val cfg = store.config() ?: return Result.success() // not configured yet
+        var refreshing = false
         try {
             val body = withContext(Dispatchers.IO) {
                 FlowApi.getWidgetFeed(cfg.baseUrl, cfg.token)
             }
-            FeedParser.parse(body) // validate before it becomes the cache
+            refreshing = FeedParser.parse(body).refreshing // validate before it becomes the cache
             store.saveFeed(body)
         } catch (t: Throwable) {
             store.markFetchFailed()
         }
         FlowWidget().updateAll(applicationContext)
+        // A live run means this snapshot goes stale the moment the run ends — chase it.
+        if (refreshing) {
+            FlowWork.relookWhileRefreshing(
+                applicationContext, inputData.getInt(FlowWork.RELOOK_ATTEMPT, 0),
+            )
+        }
         return Result.success()
     }
 }
