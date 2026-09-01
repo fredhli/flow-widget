@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- res/mipmap-anydpi-v26/ic_launcher.xml (and ic_launcher_round.xml, identical).
+     minSdk 31 means adaptive-only is fine — no legacy PNG mipmaps needed.
+     monochrome = Android 13+ themed icons; same glyph. -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+  <background android:drawable="@color/ic_launcher_background"/>
+  <foreground android:drawable="@drawable/ic_launcher_foreground"/>
+  <monochrome android:drawable="@drawable/ic_launcher_foreground"/>
+</adaptive-icon>

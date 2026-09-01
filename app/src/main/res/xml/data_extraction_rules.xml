@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The DataStore holds the dashboard token. It must never leave the device via
+     cloud backup or device-to-device transfer. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="file" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="sharedpref" path="." />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="file" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="sharedpref" path="." />
+    </device-transfer>
+</data-extraction-rules>

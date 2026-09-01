@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Cleartext escape hatch for the LAN mock-server harness.
+
+  The product rule is "http:// works for PRIVATE-RANGE (and tailnet 100.64/10) base
+  URLs only, https for everything else". Android's network security config cannot express an IP RANGE
+  (domain entries are exact-match only), so the range check is enforced in code at the
+  app's single network choke point (FlowApi.assertSchemeAllowed): any http:// URL whose
+  host is not loopback / RFC1918 / link-local / "localhost" is refused before a socket
+  is opened, both at config-save time and on every request. This file then re-opens the
+  platform cleartext gate that the check guards.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

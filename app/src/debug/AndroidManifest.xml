@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debug-only manifest additions. The manifest merger folds this into the DEBUG build
+     only; assembleRelease never sees it, so the shipped APK's component list is
+     untouched (verified by the badging/xmltree diff in flow-widget-support/VERIFY). -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <!-- The widget preview harness: renders the real FlowWidget composition at an
+             exact bucket size against a seeded DataStore fixture, for scripted
+             screenshots (flow-widget-support/widget-shots.sh). Exported so a bare
+             `adb shell am start -n` can drive it without root. Debug builds only. -->
+        <activity
+            android:name=".preview.PreviewActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.DeviceDefault.DayNight" />
+
+        <!-- The offline-fetch probe, on a device with no widget placed on a launcher:
+             seeds a good batch, runs the REAL FlowWork.fetchNow, and reports the
+             DataStore transitions (offline mark, cache intact, age still counting) to
+             logcat. The refresh-tap half of this probe went away with the header's
+             refresh control. Exported for the same `adb shell am start -n` reason.
+             Debug builds only. -->
+        <activity
+            android:name=".preview.NetProbeActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.DeviceDefault.DayNight" />
+    </application>
+</manifest>

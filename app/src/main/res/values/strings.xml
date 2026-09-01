@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Dashboard Flow</string>
+    <string name="widget_description">Flow feed — progress and headlines at a glance.</string>
+    <string name="config_title">Flow widget setup</string>
+    <string name="config_server_label">Server</string>
+    <string name="config_server_hint">https://dashboard.fredhli.com</string>
+    <string name="config_token_label">Token</string>
+    <string name="config_token_hint">paste the dashboard token</string>
+    <string name="config_opacity_label">Background opacity</string>
+    <string name="config_opacity_hint">How solid the widget background is over the wallpaper. Dark theme runs the same drag over 80–95%: light text on a translucent dark surface needs more cover to stay readable on a bright wallpaper.</string>
+    <string name="config_opacity_value">%1$d%% / %2$d%%</string>
+    <string name="config_save">Save</string>
+    <string name="config_save_anyway">Save anyway (server unreachable)</string>
+    <string name="config_checking">Checking…</string>
+    <string name="cd_offline">Offline — showing cached items</string>
+    <string name="cd_progress">Progress</string>
+    <string name="cd_headline">Headline</string>
+</resources>

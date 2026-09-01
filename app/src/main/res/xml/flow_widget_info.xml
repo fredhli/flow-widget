@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 4x2 by default, resizable to 4x3. Sizes correspond to the two SizeMode.Responsive
+     buckets in FlowWidget (250x110 and 250x180). -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="250dp"
+    android:minHeight="110dp"
+    android:minResizeWidth="180dp"
+    android:minResizeHeight="110dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="2"
+    android:maxResizeWidth="500dp"
+    android:maxResizeHeight="450dp"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen"
+    android:updatePeriodMillis="0"
+    android:initialLayout="@layout/glance_default_loading_layout"
+    android:configure="com.fredhli.flowwidget.ConfigActivity"
+    android:widgetFeatures="reconfigurable"
+    android:description="@string/widget_description" />
