@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The app shell's settings screen and the launcher shortcuts. A separate file from
+    strings.xml on purpose: four builders write this APK in parallel and Android merges
+    every file under res/values/, so one file per owner is the whole conflict-avoidance
+    scheme. Nothing here is referenced by the widget.
+-->
+<resources>
+
+    <!-- Also the manifest's android:label for AppSettingsActivity, which is what the
+         "App info -> Settings" entry and the shortcut's own screen title show. -->
+    <string name="settings_title">Dashboard app settings</string>
+
+    <string name="settings_tap_label">Widget taps open</string>
+    <string name="settings_tap_app">The app</string>
+    <string name="settings_tap_browser">The browser</string>
+    <string name="settings_tap_hint">Where a tap on the widget lands. The browser is the pre-2.0 behaviour, kept for when the app is the thing that is broken.</string>
+
+    <string name="settings_links_label">External links open in</string>
+    <string name="settings_links_chrome">Chrome</string>
+    <string name="settings_links_custom_tab">Chrome Custom Tab</string>
+    <string name="settings_links_default_browser">Default browser</string>
+    <string name="settings_links_hint">Only links that leave the dashboard. A Custom Tab stays inside this app and comes back with the arrow; Chrome hands the link to the browser proper.</string>
+
+    <string name="settings_zoom_label">Text size</string>
+    <string name="settings_zoom_system">Follow system</string>
+    <!-- A percent of the page default. %% is a literal percent sign. -->
+    <string name="settings_zoom_pct">%1$d%%</string>
+    <string name="settings_zoom_hint">Scales the text only; the layout reflows around it. Follow system tracks the phone font-size setting.</string>
+
+    <string name="settings_open_config">Server &amp; token…</string>
+    <string name="settings_open_diagnostics">Diagnostics…</string>
+
+    <!-- App version, then the WebView package version the page is actually running on —
+         the first thing to ask for when the site behaves differently here than in Chrome. -->
+    <string name="settings_about">Dashboard Flow %1$s · WebView %2$s</string>
+
+    <!-- Launcher shortcuts (res/xml/shortcuts.xml). Short labels stay under ~10 characters
+         so One UI does not ellipsise them in the long-press sheet. -->
+    <string name="shortcut_flow">Flow</string>
+    <string name="shortcut_flow_long">Open Flow</string>
+    <string name="shortcut_morning">Morning</string>
+    <string name="shortcut_morning_long">Open the Morning brief</string>
+    <string name="shortcut_jht">JHT</string>
+    <string name="shortcut_jht_long">Open JHT</string>
+    <string name="shortcut_settings">Settings</string>
+    <string name="shortcut_settings_long">Open app settings</string>
+    <string name="shortcut_smartbeta">Smart Beta</string>
+    <string name="shortcut_smartbeta_long">Open Smart Beta</string>
+</resources>

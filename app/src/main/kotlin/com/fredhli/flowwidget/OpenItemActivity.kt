@@ -6,13 +6,29 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import androidx.glance.appwidget.updateAll
+import com.fredhli.flowwidget.app.MainActivity
+import com.fredhli.flowwidget.app.Routes
+import com.fredhli.flowwidget.app.TapTarget
 import kotlinx.coroutines.runBlocking
 
 /**
- * Invisible trampoline between a widget tap and the browser. Widget taps use activity
- * PendingIntents (always allowed to launch), and this activity is where the unread-dot
- * bookkeeping happens: record the tap time, hand the deep link to the browser, repaint
- * the widgets so the dots clear, vanish.
+ * Invisible trampoline between a widget tap and wherever the tap is supposed to land.
+ * Widget taps use activity PendingIntents (always allowed to launch), and this activity is
+ * where the unread-dot bookkeeping happens: record the tap time, hand the deep link on,
+ * repaint the widgets so the dots clear, vanish.
+ *
+ * Since 2.0.0 there are two destinations, chosen by the "Widget taps open" setting:
+ * **App** (the default) starts MainActivity at the tapped item's route, and **Browser** is
+ * the pre-2.0 behaviour — ACTION_VIEW on the same URL — kept as the escape hatch for when
+ * the shell is the thing that is broken.
+ *
+ * The URL the widget hands over is unchanged either way: `$baseUrl/#/flow` for the header
+ * band, `$baseUrl/#/flow/i/<id>` for an item. `Routes.routeOf` is what turns the second
+ * form back into `#/flow/i/<id>`; a URL with no usable fragment normalises to `#/flow`
+ * inside `routeIntent`, which is exactly what the header band means.
+ *
+ * The manifest gives this activity `taskAffinity=""` so its throw-away task (noHistory,
+ * excludeFromRecents) can never become the task MainActivity is rooted in.
  */
 class OpenItemActivity : Activity() {
 
@@ -20,18 +36,36 @@ class OpenItemActivity : Activity() {
         super.onCreate(savedInstanceState)
         val url = intent?.getStringExtra(EXTRA_URL)
         if (url != null && (url.startsWith("https://") || url.startsWith("http://"))) {
-            try {
-                startActivity(
-                    Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                )
-            } catch (_: ActivityNotFoundException) {
-                // no browser — nothing sensible to do from a widget shell
-            }
             // Small and rare (one widget tap); runBlocking keeps the process from
-            // dying before the write and repaint land.
+            // dying before the read, the write and the repaint land. The setting is read
+            // inside the same block, off the one DataStore snapshot the write follows.
             runBlocking {
-                FlowStore.get(this@OpenItemActivity).recordOpen(System.currentTimeMillis())
+                val store = FlowStore.get(this@OpenItemActivity)
+                when (store.shellPrefs().tapTarget) {
+                    TapTarget.APP -> try {
+                        startActivity(
+                            MainActivity.routeIntent(
+                                this@OpenItemActivity,
+                                Routes.routeOf(url),
+                            )
+                        )
+                    } catch (_: ActivityNotFoundException) {
+                        // Our own activity, so this is only reachable if the component has
+                        // been disabled by hand. Nothing sensible to do from a widget shell.
+                    }
+
+                    TapTarget.BROWSER -> try {
+                        startActivity(
+                            Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        )
+                    } catch (_: ActivityNotFoundException) {
+                        // no browser — nothing sensible to do from a widget shell
+                    }
+                }
+                // Both paths count as "the list was read": the dots clear whether the item
+                // opened in the app or in Chrome.
+                store.recordOpen(System.currentTimeMillis())
                 FlowWidget().updateAll(this@OpenItemActivity)
             }
         }

@@ -1,12 +1,43 @@
-# Flow — Samsung home-screen widget
+# Dashboard Flow — the app and the home-screen widget
 
-A home-screen widget over the cockpit's Flow feed. It shows the titles of the newest
-batch, greys them when they go stale, and gives you two taps: one that opens the item in
-the browser, one that opens the Flow page.
+One APK, two things.
 
-There is **no app icon**. The APK contains one widget and one settings screen — nothing to
-launch from the drawer. If you look for "Flow" in your app list you will not find it; look
-in the widget picker.
+**The widget** is a home-screen tile over the cockpit's Flow feed. It shows the titles of
+the newest batch, greys them when they go stale, and gives you two taps: one that opens the
+item, one that opens the Flow page.
+
+**The app** (new in **2.0.0**) is the whole dashboard — Flow, Morning, JHT, Smart Beta — in
+a WebView shell around `https://dashboard.fredhli.com`, signed in from the token the widget
+already stores. It exists because the site is a phone site that Chrome was making worse:
+a URL bar eating vertical space, a tab that gets recycled, a share sheet that cannot reach
+an authenticated file, and no way for a widget tap to land in a window that was already
+open. The spec is `docs/APP-SHELL-SPEC.md`; the reasoning behind it is
+`proj_2026/dashboard/ANDROID-APP-PLAN.md`.
+
+So there **is** an app icon now, where there was none through 1.1.1: **Dashboard Flow** in
+the drawer, opening the dashboard. The widget is unchanged — same feed, same look, same
+30-minute refresh — and is still added from the widget picker, not from the app.
+
+What 2.0.0 adds, in one list:
+
+- A launcher entry (`MainActivity`) that loads the dashboard and keeps it loaded: one task,
+  routes delivered into the page it already has, the page kept across a fold/unfold instead
+  of reloaded.
+- **App Links** for `dashboard.fredhli.com` and `dashboard-chl.fredhli.com` — a dashboard
+  link tapped in Messages or Gmail opens here rather than in Chrome, verified against
+  `/.well-known/assetlinks.json` on each host.
+- **App settings** (`Dashboard app settings`): where a widget tap goes (the app, default, or
+  the browser), where an off-dashboard link goes (Chrome, default, or a Chrome Custom Tab,
+  or the system default browser), and the page text size (follow the system, or 90 / 100 /
+  115 / 130 %). Plus a button into the widget's own server-and-token screen, and a
+  Diagnostics dump for the on-device measurements.
+- **Launcher shortcuts** — long-press the icon for Flow, Morning, JHT, Settings (and Smart
+  Beta, which a four-slot launcher may hide).
+- Files: an authenticated `/api/…` document — a generated CV, a raw brief — is fetched with
+  the session cookie and handed to a viewer or the share sheet, which a browser tab could
+  not do at all.
+- `versionCode 4`, `versionName 2.0.0`, `compileSdk` = `targetSdk` = **36**, `minSdk` still
+  31.
 
 ```
 this folder
@@ -53,8 +84,9 @@ only. Clearing this folder by hand to "re-publish it clean" throws `design/` awa
    from this source"*. Tap **Settings**, turn on **Allow from this source** for Dropbox,
    then press Back. This is a one-time grant, per app, and it is Dropbox you are trusting —
    not this widget.
-4. Tap **Install** → **Open** is greyed out or absent, which is correct: there is no
-   launcher activity. Tap **Done**.
+4. Tap **Install** → **Open** now works and lands on the dashboard (through 1.1.1 it was
+   greyed out, because there was no launcher activity). Either open it or tap **Done** —
+   the widget does not need the app to have been opened once.
 5. **Long-press an empty spot on the home screen** → **Widgets** → scroll to **Flow** →
    press and hold the Flow tile and drag it onto a page, or just tap it.
    - **4×2** — header plus one row, and the list scrolls to the rest. The redesign's
@@ -97,6 +129,40 @@ widget → Remove is not enough; go to Settings → Apps → Flow → Uninstall)
 
 ---
 
+## The app
+
+Tap **Dashboard Flow** in the drawer. It loads `https://dashboard.fredhli.com` and you are
+already signed in: the shell writes the token you pasted into the widget's config screen
+into the WebView's cookie jar as `dash_session` before the first load, so there is no login
+page and nothing to type. If the config was never saved the app says so and offers the
+setup screen instead of a blank page.
+
+There is no address bar and no tab, on purpose. What there is:
+
+- **Long-press the icon** → Flow · Morning · JHT · Settings, and Smart Beta if your launcher
+  shows five. Each opens that page directly, in the window that is already open if there
+  is one.
+- **Settings** → *Dashboard app settings*, also reachable from Android's own
+  Settings → Apps → Dashboard Flow → Settings. Three choices and two doors:
+  - **Widget taps open** — *The app* (default) or *The browser*. The browser option is
+    exactly what 1.1.1 did, kept for the day the shell is the broken thing.
+  - **External links open in** — *Chrome* (default), *Chrome Custom Tab* (opens inside the
+    app, back arrow returns) or *Default browser*. Only links that leave the dashboard;
+    dashboard links stay in the app.
+  - **Text size** — *Follow system* (default; WebView does **not** do this on its own, the
+    shell multiplies it in) or a pinned 90 / 100 / 115 / 130 %.
+  - **Server & token…** — the widget's own config screen, unchanged.
+  - **Diagnostics…** — the measurement dump (viewport, insets, WebView version, text zoom).
+    Copy it out; it carries no token and no query strings.
+- **Back** walks the page's own history, then leaves. **Fold and unfold** keeps the page and
+  your scroll position — the activity is not recreated.
+- A **dashboard link tapped anywhere else** (Messages, Gmail) opens here once Android has
+  verified the App Link. If it keeps opening Chrome, check Settings → Apps → Dashboard
+  Flow → *Open by default*, and that
+  `https://dashboard.fredhli.com/.well-known/assetlinks.json` loads without signing in.
+
+---
+
 ## What you are looking at
 
 | You see | It means |
@@ -108,10 +174,12 @@ widget → Remove is not enough; go to Settings → Apps → Flow → Uninstall)
 | **Grey titles** | The newest batch is more than 24 hours old. Nothing is broken; nothing is new either. The same rule greys the web page. |
 | **A small offline mark** | The last fetch failed. What you are reading is the cached batch — the widget never goes blank, it just stops claiming to be current. |
 
-**Taps**:
-- an **item** → opens `dashboard.fredhli.com/#/flow/i/<id>` in the browser, with that item
-  expanded. Your 90-day session cookie signs you in; the widget's token has nothing to do
-  with the browser.
+**Taps** (since 2.0.0 they land in the **app** by default — switch to the browser in
+*Dashboard app settings* → "Widget taps open" and you get exactly the 1.1.1 behaviour back):
+- an **item** → opens `#/flow/i/<id>` with that item expanded. In the app that is a route
+  pushed into the page if it is already loaded, so a tap on an item while the app is open in
+  the background does not reload anything. In the browser it is the same URL, signed in by
+  your 90-day session cookie — the widget's token has nothing to do with the browser.
 - the **header band** → opens the Flow page plain. The *whole* band is the target — the
   word "Flow", the empty middle, the age label, and the full 48 dp height of it. There is
   nothing else up there to hit.
@@ -234,8 +302,8 @@ default and is what you put back afterwards.
 On the usual box everything is already installed. From a WSL shell:
 
 ```bash
-source ~/tools/android-env.sh          # JDK 17, Android SDK 35, gradle — the whole contract
-cd ~/flow-widget
+source ~/tools/android-env.sh          # JDK 17, Android SDK, gradle — the whole contract
+cd ~/flow-widget                       # ~/flow-app-2.0 for the app-shell branch
 ./gradlew assembleRelease              # first run downloads ~1–2 GB and takes a while
 ~/flow-widget-support/sync-to-dropbox.sh
 ```
@@ -301,8 +369,14 @@ python3 -c "import zipfile;zipfile.ZipFile('gradle.zip').extractall('.')"
 # 4. The SDK packages this project compiles against.
 source <this folder>/tools/android-env.sh
 yes | sdkmanager --licenses
-sdkmanager --install "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+sdkmanager --install "platforms;android-36" "platforms;android-35" \
+                     "build-tools;35.0.0" "platform-tools"
 ```
+
+`android-36` is what 2.0.0 compiles against (`compileSdk = targetSdk = 36`, needed for the
+app shell's edge-to-edge and predictive-back behaviour); `android-35` is kept because the
+fallback in `docs/APP-SHELL-SPEC.md` §8 goes back to it. If AGP asks for a build-tools
+version it cannot find, install the one it names rather than arguing with it.
 
 `tools/android-env.sh` then exports the four values that matter — `JAVA_HOME`,
 `ANDROID_HOME`, `ANDROID_SDK_ROOT`, `GRADLE_HOME` — and puts them on `PATH`. Source it
@@ -342,7 +416,15 @@ is wrong — the browser uses a cookie, the widget uses the token, and only one 
 be broken at a time. Re-paste it from `dashboard/.env`, watching for a trailing space.
 
 **A tap opens the browser to a sign-in page.** The 90-day session cookie expired. Sign in
-once; every later tap lands on the item again.
+once; every later tap lands on the item again. (With taps set to the app, the equivalent is
+the app showing the dashboard's own sign-in page: the token in *Server & token…* no longer
+matches the server, so re-paste it from `dashboard/.env`.)
+
+**The app opens but the widget does not, or the other way round.** They use different
+credentials against the same server — the app is signed in by the `dash_session` cookie the
+shell writes from the stored token, the widget sends that token as a Bearer header — but
+both read the *same* stored token, so one working and the other not is a server-side or
+network difference, not a wrong token. Check `https://dashboard.fredhli.com` in Chrome.
 
 **Install fails with "app not installed" or "package appears to be invalid".** Either the
 Dropbox download had not finished (check the file size against `apk/BUILD-INFO.txt`), or

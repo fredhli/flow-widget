@@ -1,0 +1,18 @@
+<!--
+    Launcher shortcut icon: Flow. Three stacked bars — the feed.
+
+    Same shape as the widget's own glyphs (24dp vector, one path, flat fill) with one
+    difference: the fill is white. A shortcut icon is tinted and masked by the launcher,
+    which draws it on its own coloured disc, so a black glyph would be a black hole on One
+    UI's dark shortcut chips. Nothing here is meant to be looked at closely; a shortcut
+    icon renders at about 24dp on a phone.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M3,5 H21 V9 H3 Z M3,10.5 H21 V14.5 H3 Z M3,16 H17 V20 H3 Z" />
+</vector>

@@ -1,0 +1,15 @@
+<!--
+    Launcher shortcut icon: JHT (the job hunt). A briefcase: a body, plus a handle drawn as
+    three bars rather than an outline, so every sub-path is a clockwise rectangle and the
+    non-zero fill rule unions them instead of punching holes.
+    White fill: the launcher tints and masks it (see ic_shortcut_flow.xml).
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M9,3 H15 V5 H9 Z M9,3 H11 V8 H9 Z M13,3 H15 V8 H13 Z M2,8 H22 V20 H2 Z" />
+</vector>

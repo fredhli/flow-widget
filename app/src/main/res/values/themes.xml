@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The running theme. DeviceDefault.DayNight so WebView's isLightTheme lookup (which
+         drives prefers-color-scheme with algorithmic darkening off) follows the system.
+         Bars transparent: the page runs edge-to-edge and pads with env(safe-area-inset-*).
+         Light bar icons here; values-night flips them. The page then corrects the icons
+         to its own surface colour through Native.themeColor, so a light system theme with
+         a dark page still gets readable icons. -->
+    <style name="Theme.Dashboard" parent="@android:style/Theme.DeviceDefault.DayNight">
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowBackground">@color/shell_background</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:windowLayoutInDisplayCutoutMode">always</item>
+    </style>
+
+    <!-- Cold-start splash (core-splashscreen). IconBackground variant: the launcher
+         foreground is white arcs, invisible on a light ground without the violet disc.
+         installSplashScreen() swaps to postSplashScreenTheme before the first frame. -->
+    <style name="Theme.Dashboard.Splash" parent="Theme.SplashScreen.IconBackground">
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="windowSplashScreenIconBackgroundColor">@color/ic_launcher_background</item>
+        <item name="postSplashScreenTheme">@style/Theme.Dashboard</item>
+    </style>
+</resources>

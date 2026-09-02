@@ -315,10 +315,33 @@ and the APK it produced was byte-identical (`sha256 b54516f9…`) to the shipped
 `app/src/main/`, so the release APK's bytes change. What must *not* change is what the APK
 declares: the same package, the same single widget provider and config activity, **the same
 permissions** (one declared — `INTERNET` — and six after WorkManager's manifest merges in;
-"two" appeared here and in VERIFY §8b step 7 and was never a count of anything), no launcher
-activity, no `preview/` classes in the release dex. VERIFY §8's release-unchanged check is
-written for exactly that distinction — components identical, bytes different — and it is the
-check that has to pass now, not the sha256 line above.
+"two" appeared here and in VERIFY §8b step 7 and was never a count of anything), ~~no
+launcher activity,~~ no `preview/` classes in the release dex. VERIFY §8's release-unchanged
+check is written for exactly that distinction — components identical, bytes different — and
+it is the check that has to pass now, not the sha256 line above.
+
+### Amended 2026-09-02 (2.0.0, the app shell): the component list moved, once, deliberately
+
+The struck clause is the one thing on that list the app shell breaks, and it breaks it on
+purpose: 2.0.0 turns this APK into the Dashboard app as well as the widget
+(`docs/APP-SHELL-SPEC.md`, `proj_2026/dashboard/ANDROID-APP-PLAN.md` §8/§10). The manifest
+now also declares `.app.MainActivity` (LAUNCHER + an autoVerify App Links filter for
+`dashboard.fredhli.com` and `dashboard-chl.fredhli.com`), `.app.AppSettingsActivity`
+(APPLICATION_PREFERENCES), `.app.DashboardFileProvider`, a `<queries>` block, and static
+shortcuts; `versionCode` 3 → 4, `versionName` 1.1.1 → 2.0.0, `compileSdk`/`targetSdk`
+35 → 36. **Permissions do not move** — `INTERNET` is still the only one declared, and the
+shell adds none (files go to the app's own cache through a FileProvider grant, never to
+shared storage).
+
+The half of the rule that still holds unchanged, and is the one to check: **the widget's own
+components and behaviour are identical.** `FlowWidget.kt`, `GlassSurface.kt`, `Workers.kt`,
+`FeedParser.kt` and `FlowWidgetReceiver` are byte-identical to v1.1.1; the widget provider
+and `ConfigActivity` are declared exactly as they were; `FlowStore` gained three keys and
+two functions and changed none of the existing ones; `OpenItemActivity` gained a second
+destination (the app, by default) and kept the browser one, the same `EXTRA_URL`, the same
+`recordOpen` + `updateAll` on both paths. So the gallery of 36 widget frames must still come
+back `IDENTICAL` against round 3 — a visual diff in any widget state is a bug in the shell
+work, not a consequence of it.
 
 ---
 

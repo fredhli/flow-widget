@@ -5,6 +5,34 @@
          what it needs; nothing else is requested. -->
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- Package visibility (API 30+). The shell asks questions the package manager will
+         otherwise answer with "nothing installed": is Chrome present (Links), is there a
+         Custom Tabs provider (Links), can an intent:// link resolve (Links), can anything
+         view or receive a file (Files). Without these, resolveActivity() returns null for
+         apps that are plainly there, and every link would fall through to "no handler". -->
+    <queries>
+        <package android:name="com.android.chrome" />
+        <intent>
+            <action android:name="android.support.customtabs.action.CustomTabsService" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="https" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="*/*" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.SEND" />
+            <data android:mimeType="*/*" />
+        </intent>
+    </queries>
+
+    <!-- enableOnBackInvokedCallback: predictive back for the whole app. MainActivity walks
+         the WebView history through an OnBackPressedCallback that is only enabled while
+         there is history to walk; with it disabled the system animation closes the app. -->
     <application
         android:label="@string/app_name"
         android:icon="@mipmap/ic_launcher"
@@ -12,10 +40,10 @@
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:networkSecurityConfig="@xml/network_security_config"
-        android:supportsRtl="true">
+        android:supportsRtl="true"
+        android:enableOnBackInvokedCallback="true">
 
-        <!-- The widget. No launcher activity anywhere in this manifest: the APK is a
-             shell around this one receiver. -->
+        <!-- The widget: byte-identical to v1.1.1. -->
         <receiver
             android:name=".FlowWidgetReceiver"
             android:exported="true"
@@ -29,7 +57,8 @@
         </receiver>
 
         <!-- Widget configuration: base URL + token, entered once. Exported so the
-             launcher can start it for ACTION_APPWIDGET_CONFIGURE. -->
+             launcher can start it for ACTION_APPWIDGET_CONFIGURE. Also reachable from
+             the app's "Set up…" panel and from settings, without an app-widget id. -->
         <activity
             android:name=".ConfigActivity"
             android:exported="true"
@@ -40,13 +69,75 @@
             </intent-filter>
         </activity>
 
-        <!-- Invisible trampoline: records the tap time (unread-dot bookkeeping) and
-             hands the deep link to the browser. Never shown, never in recents. -->
+        <!-- Widget-tap trampoline: records the tap time (unread-dot bookkeeping) and hands
+             the deep link to the app or the browser. Never shown, never in recents.
+             taskAffinity="" keeps its throw-away task separate from MainActivity's, so the
+             app's task is never rooted in an excludeFromRecents, noHistory activity. -->
         <activity
             android:name=".OpenItemActivity"
             android:exported="false"
             android:theme="@android:style/Theme.NoDisplay"
             android:excludeFromRecents="true"
-            android:noHistory="true" />
+            android:noHistory="true"
+            android:taskAffinity="" />
+
+        <!-- The app. singleTask: one instance, routes arrive via onNewIntent. configChanges:
+             the WebView keeps its page across fold/unfold, rotation, density, dark mode,
+             font scale and keyboard changes instead of being recreated (a recreated WebView
+             is a reload, a lost scroll position and a lost half-typed memo).
+             windowSoftInputMode=adjustResize: edge-to-edge means the framework does not
+             actually resize, but adjustPan would scroll the whole page under the keyboard;
+             the shell handles the IME inset itself (Insets.kt). -->
+        <activity
+            android:name=".app.MainActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.Dashboard.Splash"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|density|uiMode|keyboard|keyboardHidden|fontScale"
+            android:resizeableActivity="true"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- App Links for both instances; verified against
+                 https://<host>/.well-known/assetlinks.json (§7). https only. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+                <data android:host="dashboard.fredhli.com" />
+                <data android:host="dashboard-chl.fredhli.com" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity>
+
+        <!-- Settings: tap target, link policy, text size, server & token, diagnostics.
+             APPLICATION_PREFERENCES lets the system's app-info page offer it. -->
+        <activity
+            android:name=".app.AppSettingsActivity"
+            android:exported="true"
+            android:label="@string/settings_title"
+            android:theme="@android:style/Theme.DeviceDefault.DayNight">
+            <intent-filter>
+                <action android:name="android.intent.action.APPLICATION_PREFERENCES" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <!-- Hands fetched files (cacheDir/downloads) to viewers and the share sheet. -->
+        <provider
+            android:name=".app.DashboardFileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 </manifest>

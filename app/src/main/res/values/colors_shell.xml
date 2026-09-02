@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The dashboard's light background token (app.css :root, the "bg" custom
+         property). The window, the WebView's own background and the error panel all
+         paint this, so nothing white ever shows between "window up" and "page painted". -->
+    <color name="shell_background">#F4F6FB</color>
+    <color name="splash_background">#F4F6FB</color>
+</resources>

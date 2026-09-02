@@ -1,0 +1,18 @@
+<!--
+    Launcher shortcut icon: Morning. A sun with three rays over a horizon line.
+    White fill: the launcher tints and masks it (see ic_shortcut_flow.xml).
+
+    Every sub-path is wound the same way (the disc uses sweep-flag 1, i.e. clockwise, like
+    the rectangles): with the default non-zero fill rule, two overlapping sub-paths of
+    OPPOSITE winding cancel and punch a hole, which is exactly what a counter-clockwise
+    disc under the vertical ray would do.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M12,8 m-4,0 a4,4 0 1,1 8,0 a4,4 0 1,1 -8,0 M11,2 H13 V5 H11 Z M2,7 H5 V9 H2 Z M19,7 H22 V9 H19 Z M2,17 H22 V19 H2 Z" />
+</vector>

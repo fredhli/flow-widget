@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Links / Files (app shell). Fixed strings only: a toast here never carries a URL,
+     a header, or an exception message, because URLs from the page can hold ?k=<token>. -->
+<resources>
+    <string name="links_no_handler">No app can open this link</string>
+    <string name="files_fetching">Fetching…</string>
+    <string name="files_failed">Couldn\'t fetch the file</string>
+    <string name="files_too_big">File is too large to share</string>
+</resources>

@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    DEBUG VARIANT of app/src/main/res/xml/shortcuts.xml. Identical except that every
+    android:targetPackage says com.fredhli.flowwidget.debug — the debug build's
+    applicationIdSuffix. Resource XML gets no ${applicationId} substitution, so this copy
+    is the only way the debug install's shortcuts resolve to anything at all. Keep the two
+    files in step; the only legitimate difference is the package name.
+-->
+<!--
+    Static launcher shortcuts (long-press the icon). Four of them are a dashboard route
+    handed to MainActivity as EXTRA_ROUTE — the same extra the widget's trampoline and
+    MainActivity.routeIntent use, so a shortcut, a widget tap and an App Link all arrive
+    through one code path (handleIntent).
+
+    ORDER MATTERS. Most launchers, One UI included, show only the first four static
+    shortcuts, so Settings sits fourth deliberately: it is the one that has no other
+    entry point on the home screen, and Smart Beta — the page Fred opens least from cold —
+    is the one that may fall off the end.
+
+    android:targetPackage cannot be ${applicationId}: resource XML is not manifest XML and
+    gets no placeholder substitution. The debug variant therefore has its own copy of this
+    file under app/src/debug/res/xml/ with the .debug package. If the two ever disagree,
+    the debug build's shortcuts silently do nothing (the launcher resolves a component in
+    a package that is not there).
+
+    The launcher may relaunch MainActivity with CLEAR_TASK for a shortcut; both the cold
+    and the hot route paths in MainActivity handle that.
+-->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <shortcut
+        android:shortcutId="flow"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_flow"
+        android:shortcutShortLabel="@string/shortcut_flow"
+        android:shortcutLongLabel="@string/shortcut_flow_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.fredhli.flowwidget.debug"
+            android:targetClass="com.fredhli.flowwidget.app.MainActivity">
+            <extra
+                android:name="com.fredhli.flowwidget.EXTRA_ROUTE"
+                android:value="#/flow" />
+        </intent>
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="morning"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_morning"
+        android:shortcutShortLabel="@string/shortcut_morning"
+        android:shortcutLongLabel="@string/shortcut_morning_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.fredhli.flowwidget.debug"
+            android:targetClass="com.fredhli.flowwidget.app.MainActivity">
+            <extra
+                android:name="com.fredhli.flowwidget.EXTRA_ROUTE"
+                android:value="#/morning" />
+        </intent>
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="jht"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_jht"
+        android:shortcutShortLabel="@string/shortcut_jht"
+        android:shortcutLongLabel="@string/shortcut_jht_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.fredhli.flowwidget.debug"
+            android:targetClass="com.fredhli.flowwidget.app.MainActivity">
+            <extra
+                android:name="com.fredhli.flowwidget.EXTRA_ROUTE"
+                android:value="#/jht" />
+        </intent>
+    </shortcut>
+
+    <!-- Not a route: the settings screen is its own activity, started plain. -->
+    <shortcut
+        android:shortcutId="settings"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_settings"
+        android:shortcutShortLabel="@string/shortcut_settings"
+        android:shortcutLongLabel="@string/shortcut_settings_long">
+        <intent
+            android:action="android.intent.action.MAIN"
+            android:targetPackage="com.fredhli.flowwidget.debug"
+            android:targetClass="com.fredhli.flowwidget.app.AppSettingsActivity" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="smart-beta"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_smartbeta"
+        android:shortcutShortLabel="@string/shortcut_smartbeta"
+        android:shortcutLongLabel="@string/shortcut_smartbeta_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.fredhli.flowwidget.debug"
+            android:targetClass="com.fredhli.flowwidget.app.MainActivity">
+            <extra
+                android:name="com.fredhli.flowwidget.EXTRA_ROUTE"
+                android:value="#/smart-beta" />
+        </intent>
+    </shortcut>
+</shortcuts>
