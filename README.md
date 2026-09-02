@@ -98,7 +98,13 @@ only. Clearing this folder by hand to "re-publish it clean" throws `design/` awa
    - If you want more items visible than that, say so — it is a spacing decision
      (`DESIGN-NOTES.md` #2), not a setting.
    - One UI lets you resize after placing: long-press the widget → drag the handles.
-6. The **config screen opens as soon as you place it**. Two fields and a slider:
+   - **On the Fold 8 cover screen** the launcher hands the widget a much bigger cell
+     (~397×399 dp on the 4-column grid — round 3 measured it off your screenshots), so
+     you get four-plus rows and the type scales up with it: the header goes to 19.5 sp,
+     the ago label to 13.5 sp on a shared baseline, titles to 15 sp. Nothing to configure;
+     the widget picks the fold layout whenever the cell is ≥ 340 dp wide.
+6. The **config screen opens as soon as you place it**. Two fields, two sliders, three
+   dropdowns:
    - **Base URL** — leave it at `https://dashboard.fredhli.com`.
    - **Token** — paste `DASHBOARD_TOKEN` from `proj_2026/dashboard/.env` (the line reads
      `DASHBOARD_TOKEN=…`; copy everything after the `=`, no quotes, no trailing spaces).
@@ -120,7 +126,27 @@ only. Clearing this folder by hand to "re-publish it clean" throws `design/` awa
        the cost of the background being a theme-aware drawable instead of a picture
        painted at draw time, which is what makes it flip correctly when the phone
        switches to dark mode. You will not see the steps.
-   Save. The widget fetches immediately.
+   - **Title font** (round 3) — *System default* keeps One UI Sans, the font you liked in
+     Bixby (that is why it is the default: naming any family would replace it). *Medium
+     (500)* switches titles to `sans-serif-medium` (Roboto Medium on most builds);
+     *Serif* switches to the system serif — in 中文 that is a Ming/Song face, the one
+     choice that is unmistakably different. Row titles only; the "Flow" header stays
+     sans Bold. Custom font *files* remain impossible in a widget (`RESEARCH.md` §2).
+   - **Tap on an item** (round 3) — *Open dashboard* (default) opens the item's page as
+     before. *Expand in widget* makes a tap unfold the item's text right there under the
+     title: markdown stripped to plain text, clamped to 5 lines, that item's unread dot
+     cleared. Tap the row again — or any other row — to collapse it. In this mode item
+     taps never leave the widget; the header still opens the Flow page.
+   - **Open links with** (round 3) — *Dashboard app* (default) hands links to whatever
+     Android resolves, as before. *Chrome* pins them to Chrome, falling back to the
+     default browser automatically if Chrome is missing or disabled. Applies to the
+     header tap and, in open-dashboard mode, item taps. Worth knowing: this widget
+     setting is the **only** reliable route into full Chrome — links tapped *inside* the
+     installed dashboard app can never escape to Chrome (Chrome refuses intents aimed at
+     itself, unconditionally, since M113), but the widget fires from its own process, so
+     the block does not apply here.
+   Save. The widget fetches immediately. All three dropdowns keep their pre-round-3
+   behaviour until you change them — an update never changes what taps do behind your back.
 
 **Updating later**: install the new APK over the old one the same way. The config and the
 cached feed survive an update — you do not re-paste the token. If Android refuses with
@@ -174,15 +200,21 @@ There is no address bar and no tab, on purpose. What there is:
 | **Grey titles** | The newest batch is more than 24 hours old. Nothing is broken; nothing is new either. The same rule greys the web page. |
 | **A small offline mark** | The last fetch failed. What you are reading is the cached batch — the widget never goes blank, it just stops claiming to be current. |
 
-**Taps** (since 2.0.0 they land in the **app** by default — switch to the browser in
-*Dashboard app settings* → "Widget taps open" and you get exactly the 1.1.1 behaviour back):
-- an **item** → opens `#/flow/i/<id>` with that item expanded. In the app that is a route
-  pushed into the page if it is already loaded, so a tap on an item while the app is open in
-  the background does not reload anything. In the browser it is the same URL, signed in by
-  your 90-day session cookie — the widget's token has nothing to do with the browser.
+**Taps** (all of it is settings — "Tap on an item" and "Open links with" on the widget
+config screen above; "Open links with" is the same switch as *Dashboard app settings* →
+"Widget taps open", so change it in either place):
+- an **item** → with "Tap on an item" at its default, opens `#/flow/i/<id>` with that item
+  expanded — in the **app** (the default since 2.0.0: a route pushed into the page if it is
+  already loaded, so a tap while the app sits in the background reloads nothing), or, with
+  "Open links with" set to *Chrome*, the same URL in the browser, signed in by your 90-day
+  session cookie — the widget's token has nothing to do with the browser. Set "Tap on an
+  item" to *Expand in widget* and the same tap instead unfolds the item's text inline
+  (5-line clamp, plain text) and marks it read — tap again to fold it.
 - the **header band** → opens the Flow page plain. The *whole* band is the target — the
   word "Flow", the empty middle, the age label, and the full 48 dp height of it. There is
   nothing else up there to hit.
+- every link above honours **"Open links with"**: default browser resolution, or pinned
+  to Chrome with an automatic fallback when Chrome isn't there.
 
 **There is no refresh button, on purpose** (amended 2026-09-01). A tap trigger on a home
 screen is a mis-touch magnet, and refreshing is the Flow page's job: start a run from

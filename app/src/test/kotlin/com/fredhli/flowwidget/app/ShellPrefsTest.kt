@@ -40,17 +40,17 @@ class ShellPrefsTest {
 
     @Test
     fun `tap target round trips and falls back to app`() {
-        assertEquals(TapTarget.APP, TapTarget.fromStorage("app"))
-        assertEquals(TapTarget.BROWSER, TapTarget.fromStorage("browser"))
+        assertEquals(TapTarget.APP, TapTarget.fromStorage("dashboard"))
+        assertEquals(TapTarget.BROWSER, TapTarget.fromStorage("chrome"))
         for (target in TapTarget.entries) {
             assertEquals(target, TapTarget.fromStorage(target.storageValue))
         }
         assertEquals(TapTarget.DEFAULT, TapTarget.APP)
         assertEquals(TapTarget.APP, TapTarget.fromStorage(null))
         assertEquals(TapTarget.APP, TapTarget.fromStorage(""))
-        assertEquals(TapTarget.APP, TapTarget.fromStorage(" APP "))
-        assertEquals(TapTarget.BROWSER, TapTarget.fromStorage("Browser "))
-        assertEquals(TapTarget.APP, TapTarget.fromStorage("chrome"))
+        assertEquals(TapTarget.APP, TapTarget.fromStorage(" DASHBOARD "))
+        assertEquals(TapTarget.BROWSER, TapTarget.fromStorage("Chrome "))
+        assertEquals(TapTarget.APP, TapTarget.fromStorage("firefox")) // widget side rejects it too
     }
 
     @Test

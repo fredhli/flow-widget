@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Spinner entries for the round-3 settings. INDEX-ALIGNED with WidgetSettings.FONTS /
+  TAP_MODES / LINK_APPS — ConfigActivity maps selection position to the stored string by
+  position, so a reorder here without a matching reorder there mislabels the choices.
+-->
+<resources>
+    <string-array name="config_title_font_entries">
+        <item>System default</item>
+        <item>Medium (500)</item>
+        <item>Serif</item>
+    </string-array>
+    <string-array name="config_tap_mode_entries">
+        <item>Open dashboard</item>
+        <item>Expand in widget</item>
+    </string-array>
+    <string-array name="config_link_app_entries">
+        <item>Dashboard app</item>
+        <item>Chrome</item>
+    </string-array>
+</resources>

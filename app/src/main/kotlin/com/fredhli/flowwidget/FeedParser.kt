@@ -15,6 +15,14 @@ data class FeedItem(
     val ts: String?,
     val kind: String,
     val epochMs: Long? = null,
+    /**
+     * The item's text, markdown-ish, for the expand-in-widget tap mode (round 3 item
+     * 4a). Optional twice over: old cached payloads and old servers don't carry it, and
+     * the widget renders the row identically either way until the row is expanded.
+     * Accepted from `body` or, failing that, `summary` — the two names the dashboard
+     * side plausibly ships — so a server-side rename doesn't silently empty the feature.
+     */
+    val body: String? = null,
 )
 
 /** The `/api/flow/widget` payload: the newest batch only. */
@@ -63,6 +71,7 @@ object FeedParser {
                         ts = optString(o, "ts"),
                         kind = optString(o, "kind") ?: KIND_HEADLINE,
                         epochMs = optEpochMs(o, "epoch"),
+                        body = optString(o, "body") ?: optString(o, "summary"),
                     )
                 )
             }

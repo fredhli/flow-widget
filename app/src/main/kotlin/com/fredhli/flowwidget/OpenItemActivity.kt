@@ -3,6 +3,7 @@ package com.fredhli.flowwidget
 import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.os.Bundle
+import android.util.Log
 import androidx.glance.appwidget.updateAll
 import com.fredhli.flowwidget.app.Links
 import com.fredhli.flowwidget.app.MainActivity
@@ -16,7 +17,11 @@ import kotlinx.coroutines.runBlocking
  * where the unread-dot bookkeeping happens: record the tap time, hand the deep link on,
  * repaint the widgets so the dots clear, vanish.
  *
- * Since 2.0.0 there are two destinations, chosen by the "Widget taps open" setting:
+ * Since 2.0.0 there are two destinations, chosen by ONE setting with two front doors —
+ * the widget config screen's "Open links with" (round 3) and the app settings' "Widget
+ * taps open" both edit FlowStore.KEY_LINK_APP (see TapTarget). It covers every link the
+ * widget can fire: the header band and, in open-dashboard tap mode, the item rows (in
+ * expand mode item taps never leave the widget — ToggleItemAction, not this activity).
  * **App** (the default) starts MainActivity at the tapped item's route, and **Browser** is
  * the pre-2.0 behaviour — the same URL in a browser — kept as the escape hatch for when
  * the shell is the thing that is broken. Not the pre-2.0 CODE, though: a plain ACTION_VIEW
@@ -82,5 +87,6 @@ class OpenItemActivity : Activity() {
 
     companion object {
         const val EXTRA_URL = "com.fredhli.flowwidget.EXTRA_URL"
+        private const val TAG = "FlowOpen"
     }
 }

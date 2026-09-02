@@ -30,8 +30,8 @@ android {
         targetSdk = 36
         // 2.0.0: the same APK is now the widget AND the Dashboard app (a launcher
         // activity, a WebView shell, App Links). versionCode has to move for the phone to
-        // accept the install over 1.1.1.
-        versionCode = 4
+        // accept the install over 1.2.0 (versionCode 4, the last widget-only release).
+        versionCode = 5
         versionName = "2.0.0"
     }
 

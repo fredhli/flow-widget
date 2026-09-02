@@ -18,9 +18,11 @@ import androidx.glance.Image
 import androidx.glance.ImageProvider
 import androidx.glance.LocalContext
 import androidx.glance.LocalSize
+import androidx.glance.action.actionParametersOf
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.SizeMode
+import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.appWidgetBackground
 import androidx.glance.appwidget.cornerRadius
@@ -41,6 +43,7 @@ import androidx.glance.layout.height
 import androidx.glance.layout.padding
 import androidx.glance.layout.size
 import androidx.glance.layout.width
+import androidx.glance.text.FontFamily
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
@@ -57,7 +60,7 @@ import androidx.glance.text.TextStyle
  */
 class FlowWidget : GlanceAppWidget() {
 
-    override val sizeMode: SizeMode = SizeMode.Responsive(setOf(COMPACT, TALL))
+    override val sizeMode: SizeMode = SizeMode.Responsive(setOf(COMPACT, TALL, FOLD))
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val store = FlowStore.get(context)
@@ -80,6 +83,19 @@ class FlowWidget : GlanceAppWidget() {
 
         /** 4x3 — header + rows with meta line. */
         val TALL = DpSize(250.dp, 180.dp)
+
+        /**
+         * The Fold 8 cover cell (round 3). Measured off the reference screenshots
+         * (design/round3/fold-cover-110pct-a.jpg, 1972x1248 @ ~2.625 px/dp): the
+         * provider lays out ~397x399 dp on Fred's 4-column cover grid and ~490x493 on
+         * the 5-column one — with Good Lock Home Up's 110% scale the launcher may
+         * report those ÷1.1 (~361 dp). 340 dp is safely under every one of those
+         * readings and safely over anything a 250 dp-bucket phone cell reports, so the
+         * bucket selection is robust to which number One UI actually sends. The height
+         * matches TALL: the fold cell is a *width* fact, and rows just fill whatever
+         * height the placement really has.
+         */
+        val FOLD = DpSize(340.dp, 180.dp)
     }
 }
 
@@ -175,6 +191,14 @@ internal data class UiState(
     val lastOpenMs: Long,
     val bgOpacityLight: Float,
     val bgOpacityDark: Float,
+    /** Row-title font choice (WidgetSettings.FONTS); "default" keeps DeviceDefault. */
+    val titleFont: String,
+    /** What an item tap does (WidgetSettings.TAP_MODES). */
+    val tapMode: String,
+    /** The row whose body is expanded inline, expand-mode only. */
+    val expandedId: String?,
+    /** Ids marked read by expanding — they lose the dot even while newer than lastOpen. */
+    val readIds: Set<String>,
 )
 
 internal fun deriveState(prefs: Preferences, nowMs: Long): UiState {
@@ -205,6 +229,12 @@ internal fun deriveState(prefs: Preferences, nowMs: Long): UiState {
         // the migration design/BRIEF.md's device-feedback round specifies.
         bgOpacityLight = GlassSurface.clampLight(prefs[FlowStore.KEY_BG_OPACITY]),
         bgOpacityDark = GlassSurface.clampDark(prefs[FlowStore.KEY_BG_OPACITY_DARK]),
+        // The round-3 settings. Absent keys ARE the migration: WidgetSettings maps
+        // absent (and junk) to the defaults, which are the pre-round-3 behaviours.
+        titleFont = WidgetSettings.titleFont(prefs[FlowStore.KEY_TITLE_FONT]),
+        tapMode = WidgetSettings.tapMode(prefs[FlowStore.KEY_TAP_MODE]),
+        expandedId = prefs[FlowStore.KEY_EXPANDED_ID],
+        readIds = WidgetSettings.decodeReadIds(prefs[FlowStore.KEY_READ_IDS]),
     )
 }
 
@@ -256,6 +286,10 @@ private fun WidgetBody(prefs: Preferences) {
     val state = deriveState(prefs, now)
     val size = LocalSize.current
     val tall = size.height >= 160.dp
+    // The Fold 8 cover cell (round 3): a threshold, not an equality against FOLD, so it
+    // holds whether LocalSize arrives as the bucket (a launcher) or as the raw cell size
+    // (the preview harness composing at the measured 397x399 / 490x493 dp cells).
+    val fold = size.width >= FlowWidget.FOLD.width
     // Note what is NOT read here: the night-mode bit. Each surface layer is a day/night
     // drawable resource the launcher resolves at apply time, so nothing in this
     // composition needs to know which theme it will be painted in — which is exactly why
@@ -286,7 +320,7 @@ private fun WidgetBody(prefs: Preferences) {
                 .padding(bottom = if (tall) 10.dp else 4.dp)
         ) {
             Column(modifier = GlanceModifier.fillMaxSize()) {
-                Header(state)
+                Header(state, fold)
                 // An inert gutter between two differently-actioned targets: the band opens
                 // `#/flow`, item row 1 opens that item. Round 1 left 2dp here on the reasoning
                 // that deleting the refresh glyph left "no neighbouring target to mis-hit" —
@@ -302,7 +336,7 @@ private fun WidgetBody(prefs: Preferences) {
                         BodyMode.UNREACHABLE -> SetupNote("Can't reach Flow — tap to set up")
                         BodyMode.LOADING -> CenteredNote("Loading…")
                         BodyMode.EMPTY -> CenteredNote("No flow yet")
-                        BodyMode.LIST -> ItemList(state, tall, now)
+                        BodyMode.LIST -> ItemList(state, tall, fold, now)
                     }
                 }
             }
@@ -325,9 +359,16 @@ private fun WidgetBody(prefs: Preferences) {
  * not the feed) and is the band's new neighbour.
  */
 @Composable
-private fun Header(state: UiState) {
+private fun Header(state: UiState, fold: Boolean) {
     val context = LocalContext.current
-    Row(
+    // The pair share one optical baseline since round 3: centring each text in the band
+    // separately floats the smaller ago label's baseline ABOVE the title's — exactly the
+    // "rides high" the fold-cover reference shots show. Glance has no baseline
+    // alignment, but for two runs of the same family, bottom-aligning the text boxes is
+    // baseline alignment to within the difference of their descents (~1sp here): the
+    // inner Row bottom-aligns the pair, and the outer Box centres the pair as one block
+    // inside the 48dp band, which stays the single full-band tap target.
+    Box(
         modifier = GlanceModifier
             .fillMaxWidth()
             .height(48.dp)
@@ -337,48 +378,64 @@ private fun Header(state: UiState) {
                         .putExtra(OpenItemActivity.EXTRA_URL, "${state.baseUrl}/#/flow")
                 )
             ),
-        verticalAlignment = Alignment.CenterVertically,
+        contentAlignment = Alignment.CenterStart,
     ) {
-        Text(
-            text = "Flow",
-            style = TextStyle(
-                color = TitleColor,
-                // 17sp, up from §3's 15: with really-Chinese row titles the header read
-                // SMALLER than the rows — CJK glyphs fill the em box where Latin leaves
-                // headroom, so a 15sp "Flow" sat visually under a 14sp 中文 title (round 2
-                // device feedback #3). The header must be the biggest text on the widget.
-                fontSize = 17.sp,
-                // §3 asks for weight 600; Glance exposes 400/500/700 and Medium(500)
-                // reads too light next to the mockup — Bold is the closer match.
-                fontWeight = FontWeight.Bold,
-            ),
-        )
-        Spacer(GlanceModifier.defaultWeight())
-        if (state.offline) {
-            Image(
-                provider = ImageProvider(R.drawable.ic_offline),
-                contentDescription = context.getString(R.string.cd_offline),
-                modifier = GlanceModifier.size(14.dp),
-                colorFilter = ColorFilter.tint(MetaColor),
+        Row(
+            modifier = GlanceModifier.fillMaxWidth(),
+            verticalAlignment = Alignment.Bottom,
+        ) {
+            Text(
+                text = "Flow",
+                style = TextStyle(
+                    color = TitleColor,
+                    // 17sp, up from §3's 15, because CJK glyphs fill the em box where
+                    // Latin leaves headroom (round 2 device feedback #3) — and 19.5sp at
+                    // the fold cell, where 17sp Latin still read visually level with the
+                    // 15sp CJK titles on the cover screen (round 3 item 2). The header
+                    // must be the biggest text on the widget at every size.
+                    fontSize = if (fold) 19.5.sp else 17.sp,
+                    // §3 asks for weight 600; Glance exposes 400/500/700 and Medium(500)
+                    // reads too light next to the mockup — Bold is the closer match.
+                    fontWeight = FontWeight.Bold,
+                ),
             )
-            Spacer(GlanceModifier.width(6.dp))
+            Spacer(GlanceModifier.defaultWeight())
+            if (state.offline) {
+                // Bottom-aligned like the texts, inside a 17dp box that parks the 14dp
+                // glyph at its top — i.e. lifted 3dp off the shared bottom line, so it
+                // sits beside the ago label's x-height instead of on its descent line.
+                // (Padding can't do this: Glance padding is view-internal and would
+                // shrink the drawn glyph inside its fixed 14dp box.)
+                Box(
+                    modifier = GlanceModifier.width(14.dp).height(17.dp),
+                    contentAlignment = Alignment.TopCenter,
+                ) {
+                    Image(
+                        provider = ImageProvider(R.drawable.ic_offline),
+                        contentDescription = context.getString(R.string.cd_offline),
+                        modifier = GlanceModifier.size(14.dp),
+                        colorFilter = ColorFilter.tint(MetaColor),
+                    )
+                }
+                Spacer(GlanceModifier.width(6.dp))
+            }
+            // The one age in the widget's chrome, on the right, in the meta grey — and
+            // the updating note in its place while the server says a run is in flight,
+            // which is how a refresh started from the web page shows up here.
+            Text(
+                text = if (state.refreshing) "updating…" else state.ageText,
+                style = TextStyle(
+                    color = if (state.refreshing) AccentColor else MetaColor,
+                    fontSize = if (fold) 13.5.sp else 12.sp,
+                ),
+                maxLines = 1,
+            )
         }
-        // The one age in the widget's chrome, on the right, in the meta grey — and the
-        // updating note in its place while the server says a run is in flight, which is
-        // how a refresh started from the web page shows up here.
-        Text(
-            text = if (state.refreshing) "updating…" else state.ageText,
-            style = TextStyle(
-                color = if (state.refreshing) AccentColor else MetaColor,
-                fontSize = 12.sp,
-            ),
-            maxLines = 1,
-        )
     }
 }
 
 @Composable
-private fun ItemList(state: UiState, tall: Boolean, nowMs: Long) {
+private fun ItemList(state: UiState, tall: Boolean, fold: Boolean, nowMs: Long) {
     val context = LocalContext.current
     val feed = state.feed ?: return
     val gap = if (tall) 8.dp else 6.dp
@@ -390,9 +447,14 @@ private fun ItemList(state: UiState, tall: Boolean, nowMs: Long) {
                     item = item,
                     baseUrl = state.baseUrl,
                     stale = state.stale,
-                    unread = isUnread(item, state.lastOpenMs),
+                    unread = isUnread(item, state.lastOpenMs, state.readIds),
                     tall = tall,
+                    fold = fold,
                     nowMs = nowMs,
+                    titleFamily = WidgetSettings.fontFamilyFor(state.titleFont),
+                    expandMode = state.tapMode == WidgetSettings.TAP_EXPAND,
+                    expanded = state.tapMode == WidgetSettings.TAP_EXPAND &&
+                        state.expandedId == item.id,
                 )
             }
         }
@@ -404,6 +466,13 @@ internal fun isUnread(item: FeedItem, lastOpenMs: Long): Boolean {
     return ts > lastOpenMs
 }
 
+/**
+ * The full unread rule since round 3: newer than the last list tap AND not individually
+ * marked read by expanding it in the widget (item 4a — expanding is reading).
+ */
+internal fun isUnread(item: FeedItem, lastOpenMs: Long, readIds: Set<String>): Boolean =
+    isUnread(item, lastOpenMs) && item.id !in readIds
+
 @Composable
 private fun ItemRow(
     context: Context,
@@ -412,11 +481,28 @@ private fun ItemRow(
     stale: Boolean,
     unread: Boolean,
     tall: Boolean,
+    fold: Boolean,
     nowMs: Long,
+    titleFamily: String?,
+    expandMode: Boolean,
+    expanded: Boolean,
 ) {
     val titleColor = if (stale) StaleColor else TitleColor
     val glyph = if (item.kind == FeedParser.KIND_PROGRESS) R.drawable.ic_progress else R.drawable.ic_headline
     val glyphCd = if (item.kind == FeedParser.KIND_PROGRESS) R.string.cd_progress else R.string.cd_headline
+    // "Tap on an item" (round 3 item 4b/4a): the pre-round behaviour opens the item on
+    // the dashboard through the trampoline; expand-mode instead toggles this row's
+    // inline body via an ActionCallback in this process — no activity, no browser.
+    val tapAction = if (expandMode) {
+        actionRunCallback<ToggleItemAction>(
+            actionParametersOf(ToggleItemAction.KEY_ITEM_ID to item.id)
+        )
+    } else {
+        actionStartActivity(
+            Intent(context, OpenItemActivity::class.java)
+                .putExtra(OpenItemActivity.EXTRA_URL, "$baseUrl/#/flow/i/${item.id}")
+        )
+    }
     Row(
         modifier = GlanceModifier
             .fillMaxWidth()
@@ -430,12 +516,7 @@ private fun ItemRow(
             // used to say about it; it is a compact-bucket column in design/BRIEF.md's
             // spacing table, recorded there so the next round does not "restore" it.
             .padding(horizontal = 14.dp, vertical = if (tall) 12.dp else 8.dp)
-            .clickable(
-                actionStartActivity(
-                    Intent(context, OpenItemActivity::class.java)
-                        .putExtra(OpenItemActivity.EXTRA_URL, "$baseUrl/#/flow/i/${item.id}")
-                )
-            ),
+            .clickable(tapAction),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // The glyph's box is also the compact row's height floor. The row wraps its
@@ -475,11 +556,19 @@ private fun ItemRow(
                 // android:textFontWeight=500 over TextAppearance.DeviceDefault — the
                 // device-default family (One UI Sans on the Fold) at weight 500, CJK
                 // fallback included where the device ships weighted CJK faces. CJK at 500
-                // sits better beside One UI Sans Latin than 400 does; naming a family
-                // string (Glance passes it into TypefaceSpan verbatim) would have *left*
-                // the device-default family, the opposite of what the brief wants.
+                // sits better beside One UI Sans Latin than 400 does. Since round 3 the
+                // family can ALSO be named — Fred's "Title font" dropdown; null (the
+                // default) keeps DeviceDefault, i.e. One UI Sans, while "sans-serif-
+                // medium"/"serif" pass verbatim into TypefaceSpan (the passthrough round
+                // 2 verified) and deliberately replace it.
                 // minSdk=31, so Glance's pre-29 textStyle=bold fallback is unreachable.
-                style = TextStyle(color = titleColor, fontSize = 14.sp, fontWeight = FontWeight.Medium),
+                // 15sp at the fold cell (+1 over the phone buckets, round 3 item 2).
+                style = TextStyle(
+                    color = titleColor,
+                    fontSize = if (fold) 15.sp else 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    fontFamily = titleFamily?.let { FontFamily(it) },
+                ),
                 maxLines = 2,
             )
             if (tall) {
@@ -488,9 +577,23 @@ private fun ItemRow(
                     text = metaLine(item, nowMs),
                     style = TextStyle(
                         color = if (stale) StaleColor else MetaColor,
-                        fontSize = 12.sp,
+                        fontSize = if (fold) 12.5.sp else 12.sp,
                     ),
                     maxLines = 1,
+                )
+            }
+            if (expanded) {
+                // The inline body (round 3 item 4a): markdown stripped to plain text,
+                // clamped to 5 lines. An item the server sent without a body still
+                // answers the tap — an em dash beats a dead-feeling row.
+                Spacer(GlanceModifier.height(4.dp))
+                Text(
+                    text = Markdown.strip(item.body).ifEmpty { "—" },
+                    style = TextStyle(
+                        color = if (stale) StaleColor else MetaColor,
+                        fontSize = if (fold) 13.5.sp else 13.sp,
+                    ),
+                    maxLines = 5,
                 )
             }
         }

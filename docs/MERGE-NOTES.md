@@ -1029,3 +1029,21 @@ gh release create v2.0.0 app/build/outputs/apk/release/app-release.apk \
 widget's DataStore fields, and the widget ignores the shell's three keys, so the widget survives
 a downgrade in either direction — the only visible effect of rolling back is that widget taps
 return to opening a browser.
+
+---
+
+## Merged 2026-09-02 (round 3 = v1.2.0 → app-shell)
+
+Done as a real 3-way merge (`git merge round3`, round3 = the v1.2.0 commit). Four
+conflicts, all resolved by keeping both sides except for one design decision:
+
+- **One widget-tap setting, two front doors.** Round 3 shipped "Open links with:
+  Dashboard app / Chrome" (`link_app`) on the widget config screen; the shell had
+  "Widget taps open: App / Browser" (`tap_target`). Same question, so `tap_target` was
+  dropped before it ever shipped: `TapTarget` now stores `"dashboard"` / `"chrome"` under
+  `FlowStore.KEY_LINK_APP`, and both screens edit that one key. `TapTarget.BROWSER` goes
+  through `Links.openInBrowser` with the link policy (default Chrome, same fallback to the
+  default browser round 3 had). Round 3's inline ACTION_VIEW block in OpenItemActivity is
+  gone — it would resolve straight back into this app via App Links.
+- `versionCode` 5 / 2.0.0 (1.2.0 took 4). targetSdk stays 36.
+- 198 unit tests green (129 widget + 69 shell); release + debug builds green.

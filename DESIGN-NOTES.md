@@ -41,9 +41,9 @@ something the plan did not predict.
 | # | Finding | Status |
 |---|---|---|
 | 1 | Title tap target is 21.7 dp tall (48 dp minimum) | `fixed in round 1 — measured 48.0 dp`, gutter restored in round 2 |
-| 2 | The 4×2 bucket renders one item row, not three | `still open — the round made it wider, not denser` |
+| 2 | The 4×2 bucket renders one item row, not three | `still open at the phone buckets — but round 3 measured the device's real cell at ~397×399 dp, where the widget shows four-plus rows; see the round-3 sub-heading` |
 | 3 | A one-line title makes a ~35 dp item row at 4×2 | `fixed in round 2 — measured 48.0 dp` |
-| 4 | §3's title line-height 1.35 cannot be expressed in Glance | `still open — struck from the spec; the escape hatch costs the composable` |
+| 4 | §3's title line-height 1.35 cannot be expressed in Glance | `still open in Glance — but round 3 measured One UI's CJK line pitch at ~1.77× on the device, past the 1.35 wish; see the round-3 sub-heading` |
 | 5 | The opacity slider is quantised, not continuous | `still open — light 16×3%; dark is 66×1% since the device-feedback round, indistinguishable from continuous` |
 
 ---
@@ -191,6 +191,19 @@ either — at an 86 dp pitch the brief's "5-6 rows" needs ~480 dp against the pr
 `maxResizeHeight="450dp"`, so it is unreachable at this spacing on any cell the widget can
 be resized to.
 
+### Re-measured 2026-09-02 (round 3): the device's real cell dissolves most of this
+
+The arithmetic above was all conducted at the 250 dp phone buckets, because until round 3
+nobody had measured the cell the widget actually lives in. The Fold 8 **cover screen**
+hands the provider **≈397×399 dp** (4-column grid) or ≈490×493 dp (5-column) —
+`design/RESEARCH.md` §4c, measured off Fred's own screenshots — and at that cell the
+references show **four to five rows with meta lines**, which is the density the brief's
+"5–6 rows" wish was reaching for. Round 3 added the `FOLD` bucket (340×180 dp width
+threshold) so typography scales up there instead of the phone sizes stretching. The
+phone-bucket numbers in this entry are unchanged and still true — for a phone-sized cell.
+Status stays `still open` on the letter of the 4×2 promise; in practice the cell that
+matters shows a real feed.
+
 ---
 
 ## 3. A one-line title makes a ~35 dp item row at 4x2 (48 dp is the minimum)
@@ -258,6 +271,18 @@ technically reachable — at the price of leaving Glance's `Text` composable for
 hand-managing the 2-line clamp, the day/night colour and the stale-grey with it. The
 alternative is to buy the intended optical spacing another way (a slightly larger font, more
 row padding) and say so. Round 2 did neither: it struck the number and left the choice here.
+
+### Re-measured 2026-09-02 (round 3): on the device the complaint is already answered
+
+The 1.17 pitch above is the **emulator's Latin** metrics. Round 3 measured the round-3
+reference screenshots — the real widget, One UI 9, 中文 titles — and the CJK title lines
+pitch at **~65 px at 2.625 px/dp ≈ 24.8 dp against a 14 sp font, i.e. ~1.77×**
+(`design/RESEARCH.md` §4c): One UI Sans's CJK fallback carries far taller vertical metrics
+than Roboto's Latin. So for the feed the widget actually shows (FLOW_SPEC 中文), the
+platform default *overshoots* §3's struck 1.35 rather than undershooting it, with no code
+involved. Glance still cannot express a line height and Latin-only titles still render
+~1.17 — the entry stays `still open` on that letter — but nobody should burn the
+composable on the escape hatch for a spacing the device already delivers.
 
 ---
 
@@ -342,6 +367,12 @@ destination (the app, by default) and kept the browser one, the same `EXTRA_URL`
 `recordOpen` + `updateAll` on both paths. So the gallery of 36 widget frames must still come
 back `IDENTICAL` against round 3 — a visual diff in any widget state is a bug in the shell
 work, not a consequence of it.
+
+*(Round 3 passed it 2026-09-02: `aapt2 dump badging` of the new release against the shipped
+`apk/flow-widget.apk` — package, versionCode 3 / 1.1.1 unchanged (no bump, per the
+orchestrator's rule), activities, receivers, permissions — diffed empty. The round-3
+`ToggleItemAction` adds no manifest component: it rides glance-appwidget's existing
+`ActionCallbackBroadcastReceiver`.)*
 
 ---
 

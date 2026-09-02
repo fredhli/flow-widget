@@ -42,13 +42,23 @@ enum class LinkPolicy(val storageValue: String) {
     }
 }
 
-/** Where a widget tap goes. */
+/**
+ * Where a widget tap goes.
+ *
+ * Stored under the widget config screen's own key, `link_app` (FlowStore.KEY_LINK_APP,
+ * added by widget round 3 as "Open links with: Dashboard app / Chrome"), with that
+ * screen's vocabulary — so the two settings screens edit ONE value rather than two
+ * switches that disagree. Round 3's "Dashboard app" meant "whatever Android resolves",
+ * which since 2.0.0 is this app (App Links); its "Chrome" is the browser escape hatch,
+ * routed through the link policy (whose default is Chrome). `WidgetSettings.linkApp` is
+ * the widget side's normaliser for the same strings.
+ */
 enum class TapTarget(val storageValue: String) {
     /** MainActivity, at the tapped item's route. The default once the shell exists. */
-    APP("app"),
+    APP("dashboard"),
 
     /** The pre-2.0 behaviour: hand the URL to the browser. Kept as the escape hatch. */
-    BROWSER("browser");
+    BROWSER("chrome");
 
     companion object {
         val DEFAULT = APP
