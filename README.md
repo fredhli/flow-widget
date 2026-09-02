@@ -1,3 +1,7 @@
+> **Archived 2026-09-02.** This repo is frozen at 2.0.1. The app and widget now live in the
+> private `fredhli/dashboard` repository as `android/`, beside the site they host, built by
+> `android/build.sh`. Nothing here is maintained.
+
 # Dashboard — the app and the Flow home-screen widget
 
 One APK, two things.
