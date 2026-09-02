@@ -6,6 +6,8 @@ import android.appwidget.AppWidgetHostView
 import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Color
+import android.graphics.BitmapFactory
+import android.graphics.drawable.BitmapDrawable
 import android.os.Bundle
 import android.util.Log
 import android.view.Gravity
@@ -66,6 +68,9 @@ import kotlinx.coroutines.launch
  *   opacity_dark  --ef opacity_dark 0.30 — the DARK glass opacity (its own slider and
  *          range since the device-feedback round; 0.30 is the floor Fred asked for).
  *   backdrop --es backdrop D7D2D9 — the colour behind the widget, RRGGBB.
+ *   backdrop_file --es backdrop_file /sdcard/wall.png — a full-screen image ground instead
+ *          (Fred's real wallpaper); with --ei left N --ei top N (px) the widget sits where his
+ *          launcher puts it rather than centred, and the caption label is left off.
  *
  * `backdrop` exists because its default hid a real defect for a whole round. A translucent
  * surface is only as legible as what is behind it, and the harness's two default grounds
@@ -185,10 +190,26 @@ class PreviewActivity : Activity() {
         host.updateAppWidget(remoteViews)
 
         val dark = isNightMode()
+        // Fold 8 ground (2026-09-02): `--es backdrop_file /sdcard/x.png` paints a real
+        // wallpaper (Fred's, rebuilt from his cover screenshot) full-screen behind the
+        // widget, and `--ei left/--ei top` (px) park the widget where his launcher does
+        // (105,150 on the cover), so a frame lays over his screenshot 1:1. Without them
+        // the widget sits centred on the flat colour ground as before.
+        val ground = intent.getStringExtra(EXTRA_BACKDROP_FILE)?.let { path ->
+            BitmapFactory.decodeFile(path)?.let { BitmapDrawable(resources, it).apply { gravity = Gravity.FILL } }
+                ?: run { Log.w(TAG, "backdrop_file '$path' did not decode — using the colour ground"); null }
+        }
+        val left = intent.getIntExtra(EXTRA_LEFT, -1)
+        val top = intent.getIntExtra(EXTRA_TOP, -1)
+        val hostParams = if (left >= 0 && top >= 0) {
+            FrameLayout.LayoutParams(wPx, hPx, Gravity.TOP or Gravity.START).apply { leftMargin = left; topMargin = top }
+        } else {
+            FrameLayout.LayoutParams(wPx, hPx, Gravity.CENTER)
+        }
         val root = FrameLayout(this).apply {
-            setBackgroundColor(backdropColor(dark))
-            addView(host, FrameLayout.LayoutParams(wPx, hPx, Gravity.CENTER))
-            addView(label("$state · $sizeSpec · ${themeName(dark)}"), labelParams())
+            if (ground != null) background = ground else setBackgroundColor(backdropColor(dark))
+            addView(host, hostParams)
+            if (ground == null) addView(label("$state · $sizeSpec · ${themeName(dark)}"), labelParams())
         }
         setContentView(root)
 
@@ -273,6 +294,9 @@ class PreviewActivity : Activity() {
         const val EXTRA_OPACITY = "opacity"
         const val EXTRA_OPACITY_DARK = "opacity_dark"
         const val EXTRA_BACKDROP = "backdrop"
+        const val EXTRA_BACKDROP_FILE = "backdrop_file"
+        const val EXTRA_LEFT = "left"
+        const val EXTRA_TOP = "top"
         const val EXTRA_FONT = "font"
         const val EXTRA_TAP = "tap"
         const val EXTRA_EXPAND = "expand"
