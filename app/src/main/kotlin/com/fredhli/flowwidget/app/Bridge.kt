@@ -2,7 +2,6 @@ package com.fredhli.flowwidget.app
 
 import android.net.Uri
 import android.webkit.WebView
-import androidx.core.view.WindowCompat
 import androidx.webkit.JavaScriptReplyProxy
 import androidx.webkit.WebMessageCompat
 import androidx.webkit.WebViewCompat
@@ -127,7 +126,14 @@ class Bridge(private val host: MainActivity) {
                 val url = msg.url
                 if (url.startsWith("http://", ignoreCase = true) || url.startsWith("https://", ignoreCase = true)) {
                     // The page asked for the browser explicitly — even for its own origin.
-                    Links.openExternal(host, url, host.prefs.linkPolicy)
+                    // For an app-origin URL that promise needs `allowSelf = false`: this
+                    // app is the verified App Links handler for its own hosts, so the
+                    // default ladder would resolve straight back to MainActivity and the
+                    // "open in browser" tap would do nothing visible (spec §3).
+                    Links.openExternal(
+                        host, url, host.prefs.linkPolicy,
+                        allowSelf = !Routes.isAppOrigin(url, host.appOrigins),
+                    )
                 } else {
                     Links.leave(host, url, host.prefs.linkPolicy, Links.classify(url, host.appOrigins))
                 }
@@ -135,10 +141,9 @@ class Bridge(private val host: MainActivity) {
             is Msg.Theme -> {
                 // The page reports the surface colour it paints under the status bar; the
                 // shell flips the bar icons to contrast with it. Unparsable → leave as is.
-                val light = isLightColor(msg.hex) ?: return
-                val controller = WindowCompat.getInsetsController(host.window, host.window.decorView)
-                controller.isAppearanceLightStatusBars = light
-                controller.isAppearanceLightNavigationBars = light
+                // The activity keeps the value, because enableEdgeToEdge() (run again on
+                // every handled uiMode change) rewrites the flags from the system theme.
+                host.applyBarAppearance(isLightColor(msg.hex) ?: return)
             }
             Msg.Metrics -> reply.postMessage(host.metricsJson().toString())
         }

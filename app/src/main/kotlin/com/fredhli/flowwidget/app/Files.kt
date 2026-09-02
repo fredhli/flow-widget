@@ -123,10 +123,15 @@ object Files {
      * and any response the WebView will not render. The name comes from the headers the
      * WebView already parsed; the fetch is ours, so the cookie is scoped the same way as
      * every other file.
+     *
+     * `onStarted` is told the URL after the fetch has been kicked off. It exists for the
+     * shell's state machine: a main-frame navigation that ends here is one the
+     * WebViewClient will never report finished (MainActivity.onDownloadStarted).
      */
-    fun downloadListener(context: Context): DownloadListener =
+    fun downloadListener(context: Context, onStarted: (url: String) -> Unit = {}): DownloadListener =
         DownloadListener { url, _, contentDisposition, mimeType, _ ->
             openOrShare(context, url, fileNameFor(url, contentDisposition, mimeType), Mode.VIEW)
+            onStarted(url)
         }
 
     /**

@@ -195,12 +195,29 @@ object Links {
     fun leave(context: Context, url: String, policy: LinkPolicy, nav: Nav): Boolean
 
     /** http(s) only. Order: (1) ACTION_VIEW + FLAG_ACTIVITY_REQUIRE_NON_BROWSER (a verified
-     *  native app for that link wins); (2) per policy — CHROME: ACTION_VIEW setPackage(CHROME_PACKAGE);
-     *  CUSTOM_TAB: CustomTabsIntent with intent.setPackage(CHROME if installed else
-     *  CustomTabsClient.getPackageName(ctx, null)); DEFAULT_BROWSER: plain ACTION_VIEW;
-     *  (3) fall back to plain ACTION_VIEW when Chrome / a Custom Tabs provider is missing.
-     *  All intents get FLAG_ACTIVITY_NEW_TASK. Returns false only when nothing could open it. */
-    fun openExternal(context: Context, url: String, policy: LinkPolicy): Boolean
+     *  native app for that link wins) — skipped when allowSelf is false; (2) per policy —
+     *  CHROME: ACTION_VIEW setPackage(CHROME_PACKAGE); CUSTOM_TAB: CustomTabsIntent with
+     *  intent.setPackage(CHROME if installed else CustomTabsClient.getPackageName(ctx, null));
+     *  DEFAULT_BROWSER: straight to (3); (3) plain ACTION_VIEW when Chrome / a Custom Tabs
+     *  provider is missing — or, when allowSelf is false, an ACTION_VIEW pinned to a browser
+     *  package resolved WITHOUT the URL's host (so App Links cannot pick this app), else a
+     *  chooser with MainActivity excluded.
+     *  allowSelf = false is for callers whose point is "leave the app" on an app-origin URL
+     *  (Native.openExternal, the widget's Browser target): this app is the verified App Links
+     *  handler for its own hosts, so (1) and a plain (3) would resolve straight back to
+     *  MainActivity.
+     *  Flags: every intent started off an Activity context carries FLAG_ACTIVITY_NEW_TASK
+     *  (mandatory there). The Custom Tab does NOT get it from an Activity — Chrome's
+     *  CustomTabActivity has taskAffinity="" so it stacks on our task, and NEW_TASK would
+     *  spawn a second "Dashboard Flow" card in Recents. Returns false only when nothing could
+     *  open it. */
+    fun openExternal(context: Context, url: String, policy: LinkPolicy, allowSelf: Boolean = true): Boolean
+
+    /** openExternal(context.applicationContext, url, policy, allowSelf = false): a URL in a
+     *  browser and never in this app, whatever App Links say. The widget's Browser target
+     *  (OpenItemActivity) — from the application context so the tab gets its own task rather
+     *  than the trampoline's throw-away one. */
+    fun openInBrowser(context: Context, url: String, policy: LinkPolicy): Boolean
 
     /** Intent.parseUri(url, URI_INTENT_SCHEME), then hardened: addCategory(BROWSABLE),
      *  component = null, selector = null, flags = FLAG_ACTIVITY_NEW_TASK only, remove
@@ -344,7 +361,10 @@ suspend fun saveShellPrefs(prefs: com.fredhli.flowwidget.app.ShellPrefs)
 and the widget-side contract (URL is `$baseUrl/#/flow` or `$baseUrl/#/flow/i/<id>`). New
 behaviour: read `FlowStore.get(this).shellPrefs().tapTarget` (inside the existing
 `runBlocking`); `APP` → `startActivity(MainActivity.routeIntent(this, Routes.routeOf(url)))`
-(null route → `Routes.DEFAULT_ROUTE` via normalise); `BROWSER` → the existing ACTION_VIEW path.
+(null route → `Routes.DEFAULT_ROUTE` via normalise); `BROWSER` →
+`Links.openInBrowser(this, url, shellPrefs.linkPolicy)` — NOT the pre-2.0 plain ACTION_VIEW,
+which now resolves to this app itself (it is the verified App Links handler for the dashboard
+hosts), so the escape hatch would lead back into the shell it exists to bypass.
 `recordOpen` + `FlowWidget().updateAll` stay in both paths. Manifest adds
 `android:taskAffinity=""` to it (shell-core writes that) so the trampoline's task never
 becomes MainActivity's task.
@@ -466,8 +486,8 @@ The dashboard detects the app by `/\bDashboardApp\//.test(navigator.userAgent)` 
 | message | shape | shell action |
 |---|---|---|
 | share | `{"t":"share","url":"https://…","name":"cv.pdf"}` | if `Routes.isAppOrigin(url)`: `Files.openOrShare(activity, url, name.ifBlank{null}, Files.Mode.SHARE)`; else drop |
-| open | `{"t":"open","url":"https://…"}` | http(s): `Links.openExternal(activity, url, prefs.linkPolicy)`; other: `Links.leave(...)` with its classification |
-| theme | `{"t":"theme","hex":"#131C2E"}` | `Bridge.isLightColor(hex)` → `WindowInsetsControllerCompat.isAppearanceLightStatusBars` / `…NavigationBars` |
+| open | `{"t":"open","url":"https://…"}` | http(s): `Links.openExternal(activity, url, prefs.linkPolicy, allowSelf = !Routes.isAppOrigin(url, appOrigins))` — an app-origin URL is guaranteed to leave the app (a browser package is pinned; App Links would otherwise route it back to MainActivity); other: `Links.leave(...)` with its classification |
+| theme | `{"t":"theme","hex":"#131C2E"}` | `Bridge.isLightColor(hex)` → `MainActivity.applyBarAppearance(light)`: `WindowInsetsControllerCompat.isAppearanceLightStatusBars` / `…NavigationBars`, and the value is remembered so `onConfigurationChanged`'s `enableEdgeToEdge()` (which re-derives the flags from uiMode) can be overridden with the page's answer again; cleared on every new document (load / WebView replacement) |
 | metrics | `{"t":"metrics"}` | reply via `JavaScriptReplyProxy.postMessage(json)` |
 
 **Shell → page reply** (only in answer to metrics):
@@ -490,7 +510,9 @@ The dashboard detects the app by `/\bDashboardApp\//.test(navigator.userAgent)` 
 **What the dashboard may assume**: the UA suffix is present on every request; on app origins
 `window.Native` exists from document start (guard anyway); `Native.share(url,name)` fetches
 `url` with the session cookie and opens the share sheet; `Native.openExternal(url)` opens the
-browser per the user's link policy; `env(safe-area-inset-*)` reflects system bars and the
+browser per the user's link policy — for an app-origin URL too: it is guaranteed to leave the
+app (the shell pins a browser package rather than let App Links hand the URL back to itself);
+`env(safe-area-inset-*)` reflects system bars and the
 cutout (§5), and when it does not the shell writes `--safe-top/-bottom/-left/-right` as inline
 styles on `<html>`; the IME shrinks the visual viewport (WebView ≥ 144) or the WebView height
 (older); cookies persist across launches; the shell calls `window.DashboardApp.route(url)` and
@@ -686,7 +708,8 @@ vertical, gravity center, padding 32dp, background `@color/shell_background`) co
 ("Set up the server first"), `shell_unconfigured_text` ("Enter the dashboard address and token,
 then come back."), `shell_setup` ("Set up…"), `shell_ssl_error` ("The connection is not
 secure."), `shell_http_error` ("The server answered %1$d."), `shell_renderer_crashed`
-("The page crashed and was reloaded."), `diag_title` ("Diagnostics"), `diag_copy` ("Copy"),
+("The page crashed and was reloaded."), `shell_load_stalled` ("The page did not load."),
+`diag_title` ("Diagnostics"), `diag_copy` ("Copy"),
 `diag_again` ("Run again"), `diag_close` ("Close"), `diag_copied` ("Copied").
 
 ---
@@ -695,7 +718,16 @@ secure."), `shell_http_error` ("The server answered %1$d."), `shell_renderer_cra
 
 1. `MainActivity.onCreate`: `installSplashScreen()` before `super.onCreate`, then
    `enableEdgeToEdge()` (activity-ktx; sets `decorFitsSystemWindows=false` and transparent
-   bars). Call `enableEdgeToEdge()` again in `onConfigurationChanged` (uiMode flips).
+   bars). Call `enableEdgeToEdge()` again in `onConfigurationChanged` (uiMode flips) — and
+   right after it re-apply the page's last `Native.themeColor` answer (`pageBarsLight`,
+   `applyBarAppearance`): `enableEdgeToEdge()` rewrites the bar-icon flags from uiMode, and
+   the page does not re-report on a fold or rotation.
+   Every OTHER activity (AppSettingsActivity, ConfigActivity — plain framework theme, root
+   `ScrollView` with an id) is edge-to-edge too at targetSdk 36, with no opt-out, and pads
+   itself: `ViewCompat.setOnApplyWindowInsetsListener(root)` sets the root's padding to
+   `systemBars() or displayCutout()` (cutout mode is ALWAYS) and returns the insets
+   unconsumed. Padding on the ScrollView, not the column inside it, so the bar regions keep
+   the window background and the content scrolls between them.
 2. System bars + display cutout are NOT consumed natively. Chromium WebView turns the
    insets it receives into `env(safe-area-inset-*)`; the page already pads with
    `--safe-top/-bottom/-left/-right: env(safe-area-inset-*, 0px)` (`app.css` :root lines 79-82).
@@ -710,11 +742,16 @@ secure."), `shell_http_error` ("The server answered %1$d."), `shell_renderer_cra
    The listener: `ViewCompat.setOnApplyWindowInsetsListener(webContainer) { v, insets -> … }`;
    it also records the last `systemBars() or displayCutout()` and `ime()` insets for
    Diagnostics and `pushSafeInsets`.
-4. Fallback when `env()` is zero on the device: on the first READY of each page load run
+4. Fallback when `env()` is zero on the device: on the first READY of each DOCUMENT — armed
+   by `load()` and by every app-origin main-frame `onPageStarted`, so a navigation the shell
+   did not start (the 401 → /login redirect and the sign-in, an in-app link, a routed popup,
+   `pushRoute`'s `location.href`) gets its own probe — run
    `Diagnostics.JS_ENV_PROBE` (returns `"t,b,l,r"` px of a hidden fixed div padded with
    `env(safe-area-inset-*)`). If the native top or bottom inset > 0 but the probe reports 0
    for it, set `safeVarFallback = true` and call `pushSafeInsets()` now and on every later
-   insets change. `pushSafeInsets()` evaluates
+   insets change; while the fallback is on it is also pushed at `onPageCommitVisible` and
+   `onPageFinished` of every later document (inline styles die with the document they were
+   set on). `pushSafeInsets()` evaluates
    `document.documentElement.style.setProperty('--safe-top','<px/density>px')` (and bottom /
    left / right, values in CSS px = insetPx / density, integer-rounded). Inline `<html>`
    style beats the `:root` stylesheet rule, so nothing in app.css changes.
@@ -736,9 +773,12 @@ Sources of a target:
   `baseUrl + "/"` (the page picks its own last route). Warm/hot → nothing.
 - `EXTRA_ROUTE` (widget via OpenItemActivity, shortcuts, `routeIntent`):
   `pendingUrl = Routes.pageUrl(baseUrl, extra)`.
-- `ACTION_VIEW` with data (App Links): if `Routes.isAppOrigin(data, appOrigins)` →
-  `pendingUrl = data.toString()`; else `Links.openExternal(this, data, policy)` and, when no
-  page is loaded yet, fall back to the home URL (never leave the shell on a blank screen).
+- `ACTION_VIEW` with data (App Links): `Links.classify(data, appOrigins)` — `IN_APP` →
+  `pendingUrl = data.toString()`; anything else → `Links.leave(this, data, policy, nav)` (an
+  app-origin `/api/…` URL is a document: the App Links filter matches every path on the host,
+  and loading it would leave the WebView on a PDF with the shell stuck in LOADING; an
+  off-origin URL goes to the browser) and, when no page is loaded yet, fall back to the home
+  URL (never leave the shell on a blank screen).
 - `EXTRA_DIAGNOSTICS=true` → `pendingDiagnostics = true`.
 
 `onCreate` and `onNewIntent` both funnel into `handleIntent(intent)`; `onNewIntent` also
@@ -753,6 +793,30 @@ Applying `pendingUrl`:
   `pendingUrl` stays set until `onPageFinished` for that origin confirms it, then clears.
 - state `LOADING` (**warm**): keep `pendingUrl`; `onPageFinished(url)` applies it if
   `Routes.originOf(url) == Routes.originOf(pendingUrl)` (hot path), else `loadUrl`.
+
+`LOADING` is never terminal. Two things end a `load()` besides `onPageFinished`/`showError`:
+- A download. When the URL handed to `loadUrl` (or a redirect off it) answers with an
+  attachment, WebView fires the `DownloadListener` and no `onPageFinished` ever comes.
+  `DashboardWebView` forwards the listener to `MainActivity.onDownloadStarted(view, url)`:
+  the stalled `load` is abandoned; `pendingUrl` is dropped if it was that very document;
+  if `view.url` is an app-origin page that is not the document (the previous page is still
+  showing) the state becomes `READY` and `pendingUrl` is applied; otherwise the shell
+  recovers with `load(pendingUrl ?: recoveryUrl)` where `recoveryUrl` is `lastUrl` unless
+  `lastUrl` is the document itself, then the home URL — and if that recovery would reload
+  the very URL whose load produced the download (a 302 to an attachment), it shows
+  `shell_load_stalled` instead of looping.
+- A 10 s watchdog (`LOAD_WATCHDOG_MS`), armed by `load()` and disarmed by `onPageStarted`.
+  It only fires when the navigation never started at all (an `intent://` handed to a
+  scheme handler, a URL Chromium refused silently): it drops `pendingUrl`, and loads the
+  recovery URL, or shows `shell_load_stalled` when that recovery is the abandoned URL.
+
+`onPageFinished` on an origin other than `pendingUrl`'s reloads the target once
+(`mismatchReloads`); a second mismatch in a row shows `shell_load_stalled` with
+`pendingUrl` cleared, so a server that keeps bouncing the shell elsewhere cannot make it
+reload forever. Any new target from `handleIntent` resets the counter.
+
+`lastUrl` is set in `onPageStarted` only for `IN_APP` URLs (never a document or an
+off-origin URL), so the recovery targets above always point at a page the shell can show.
 
 Cookie seeding (`seedCookie(baseUrl, token)`): before every `loadUrl` of an app-origin URL and
 whenever the stored config changes: `CookieManager.getInstance()` → `setAcceptCookie(true)`,
@@ -775,7 +839,14 @@ Splash: `splash.setKeepOnScreenCondition { keepSplash }`; `keepSplash` becomes f
 
 Renderer crash (`onRenderProcessGone`): if `detail.didCrash()` or not, always: remove the
 WebView from `web_container`, `destroy()` it, create a fresh one via `DashboardWebView`, re-run
-`seedCookie`, `loadUrl(lastUrl ?: homeUrl)`, toast `shell_renderer_crashed`, return `true`.
+`seedCookie`, return `true`. The fresh WebView mirrors the Activity's lifecycle at once
+(`onResume/resumeTimers` when RESUMED, else `onPause/pauseTimers`). The reload is gated on
+the lifecycle: when the Activity is at least STARTED, `load(pendingUrl ?: lastUrl ?: homeUrl)`
+plus the toast `shell_renderer_crashed`; otherwise (the renderer died while the app was in
+the background, the common case) the target becomes `pendingUrl` and `onResume` →
+`applyPending` loads it — no work, no toast, from a stopped Activity. The popup child
+(`PopupCatcher`) answers `onRenderProcessGone` itself (release, `true`) so a shared-renderer
+crash never kills the app process through an unhandled client.
 
 Back: `onBackPressedDispatcher.addCallback(this, callback)`; `callback.isEnabled =
 webView.canGoBack()` refreshed in `doUpdateVisitedHistory` and `onPageFinished`; the callback
@@ -1064,7 +1135,9 @@ Functional:
    (no login page). Kill the app, relaunch: still signed in.
 7. Widget tap on an item opens the app at that item (hot: app already open in the
    background; cold: app killed). Change Settings → "Widget taps open" → Browser: tap opens
-   Chrome as before.
+   Chrome as before — a browser, never the app itself (App Links verify the app for its own
+   hosts, so `OpenItemActivity` goes through `Links.openInBrowser`, which pins a browser
+   package).
 8. Shortcuts (long-press icon): Flow, Morning, JHT, Settings visible; Smart Beta may be
    hidden by the launcher's four-slot limit.
 9. Tap a Chrome-verified App Link (`https://dashboard.fredhli.com/#/jht` pasted in Messages)
@@ -1073,7 +1146,9 @@ Functional:
    default, and that `https://dashboard.fredhli.com/.well-known/assetlinks.json` returns the
    JSON unauthenticated with `Content-Type: application/json`.
 10. An off-origin link in Morning opens in Chrome (default). Switch to Custom Tab: opens a
-    Chrome tab with the app's back arrow. Switch to Default browser: system chooser/default.
+    Chrome tab with the app's back arrow and no second Recents card (one Dashboard Flow
+    card; back/close returns to the page). Switch to Default browser: system
+    chooser/default.
 11. JHT "Save CV" opens the share sheet with the PDF; "Save to Files" works; cancelling
     does nothing. A reader "save raw" does the same. A `/api/…` link that opens in a new
     tab in the browser opens a PDF viewer in the app.

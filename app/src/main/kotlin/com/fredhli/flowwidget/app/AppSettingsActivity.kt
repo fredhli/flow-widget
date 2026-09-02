@@ -3,10 +3,13 @@ package com.fredhli.flowwidget.app
 import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
+import android.view.View
 import android.widget.Button
 import android.widget.RadioButton
 import android.widget.RadioGroup
 import android.widget.TextView
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.webkit.WebViewCompat
 import com.fredhli.flowwidget.BuildConfig
 import com.fredhli.flowwidget.ConfigActivity
@@ -42,6 +45,19 @@ class AppSettingsActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_app_settings)
+        // targetSdk 36: every window is edge-to-edge and there is no opt-out, and a plain
+        // framework theme pads nothing for it — the title would sit under the status bar
+        // and the last button under the gesture bar. The bars (and the cutout, because
+        // the manifest's cutout mode is ALWAYS) become padding on the ScrollView, not the
+        // column inside it: that keeps the bar regions painted with the window background
+        // while the content scrolls between them. Insets are passed through, not consumed
+        // (spec §5) — nothing below needs them, but the rule is one rule.
+        val root = findViewById<View>(R.id.settings_root)
+        ViewCompat.setOnApplyWindowInsetsListener(root) { v, insets ->
+            val b = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
+            v.setPadding(b.left, b.top, b.right, b.bottom)
+            insets
+        }
 
         tapGroup = findViewById(R.id.tap_target_group)
         linkGroup = findViewById(R.id.link_policy_group)

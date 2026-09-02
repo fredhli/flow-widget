@@ -9,8 +9,15 @@
     fillViewport keeps the column top-aligned on the unfolded screen instead of letting a
     short page float. Everything is wrap_content vertically so a 130% system font scale
     grows the screen rather than clipping it.
+
+    The root has an id because AppSettingsActivity pads it by the system bars at runtime:
+    at targetSdk 36 every window is edge-to-edge with no opt-out, and a framework theme
+    does not pad for that — without the listener the title sits under the status bar and
+    the last control under the gesture bar (spec §5). The padding goes on the ScrollView
+    so the bar regions stay the window background and the column scrolls between them.
 -->
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/settings_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:fillViewport="true">

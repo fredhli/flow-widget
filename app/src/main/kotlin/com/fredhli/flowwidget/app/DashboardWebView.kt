@@ -89,8 +89,11 @@ object DashboardWebView {
 
         webView.webViewClient = ShellWebViewClient(activity)
         webView.webChromeClient = ShellChromeClient(activity)
-        // <a download> and Content-Disposition: attachment responses land here.
-        webView.setDownloadListener(Files.downloadListener(activity))
+        // <a download> and Content-Disposition: attachment responses land here — including
+        // a main-frame navigation the server answered with a file, which is why the
+        // activity is told: its state machine is otherwise left LOADING for a navigation
+        // that will never finish (spec §6). The DownloadListener runs on the UI thread.
+        webView.setDownloadListener(Files.downloadListener(activity) { url -> activity.onDownloadStarted(webView, url) })
         return webView
     }
 
@@ -133,7 +136,7 @@ object DashboardWebView {
         /** First paint of the new document: the moment the splash may go. */
         override fun onPageCommitVisible(view: WebView, url: String?) {
             super.onPageCommitVisible(view, url)
-            activity.onPageCommitVisible()
+            activity.onPageCommitVisible(view)
         }
 
         override fun onPageFinished(view: WebView, url: String?) {

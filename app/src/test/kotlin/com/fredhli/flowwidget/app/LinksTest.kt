@@ -35,6 +35,9 @@ class LinksTest {
         // "/api" without the trailing slash and "/apix" are not the API prefix.
         assertEquals(Nav.IN_APP, Links.classify("https://dashboard.fredhli.com/apix/x.pdf", origins))
         assertEquals(Nav.IN_APP, Links.classify("https://dashboard.fredhli.com/api", origins))
+        // An App Link to a document (the manifest filter matches every path on the host):
+        // MainActivity.handleIntent classifies it and hands it to Files, never to loadUrl.
+        assertEquals(Nav.APP_DOCUMENT, Links.classify("https://dashboard.fredhli.com/api/jht/cv.pdf", origins))
     }
 
     @Test
@@ -60,6 +63,9 @@ class LinksTest {
         assertEquals(Nav.EXTERNAL_HTTP, Links.classify("https://example.com/api/x.pdf", origins))
         // Userinfo spoof: the host is evil.com, whatever is before the '@'.
         assertEquals(Nav.EXTERNAL_HTTP, Links.classify("https://dashboard.fredhli.com@evil.com/", origins))
+        // Backslash spoof: Chromium ends the authority at '\' (WHATWG), so this navigates
+        // to evil.com with "/@dashboard.fredhli.com/" as its path — never IN_APP.
+        assertEquals(Nav.EXTERNAL_HTTP, Links.classify("https://evil.com\\@dashboard.fredhli.com/", origins))
         // A subdomain or a lookalike is not the origin.
         assertEquals(Nav.EXTERNAL_HTTP, Links.classify("https://x.dashboard.fredhli.com/", origins))
         assertEquals(Nav.EXTERNAL_HTTP, Links.classify("https://dashboard.fredhli.com.evil.com/", origins))

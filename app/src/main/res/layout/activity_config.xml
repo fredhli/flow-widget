@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    The root has an id because ConfigActivity pads it by the system bars at runtime: at
+    targetSdk 36 every window is edge-to-edge with no opt-out, and a framework theme does
+    not pad for that (see activity_app_settings.xml, the same shape, and spec §5).
+-->
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/config_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:fillViewport="true">

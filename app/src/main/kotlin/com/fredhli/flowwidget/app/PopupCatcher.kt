@@ -6,6 +6,7 @@ import android.graphics.Bitmap
 import android.os.Handler
 import android.os.Looper
 import android.os.Message
+import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -93,15 +94,41 @@ class PopupCatcher(private val context: Context, private val onUrl: (String) -> 
      */
     private fun release(child: WebView) {
         if (!children.remove(child)) return
-        // A plain client first, so nothing Chromium fires during stopLoading/destroy
+        // An inert client first, so nothing Chromium fires during stopLoading/destroy
         // re-enters CapturingClient on a child that is going away.
-        child.webViewClient = WebViewClient()
+        child.webViewClient = InertClient
         child.stopLoading()
         child.destroy()
     }
 
+    /**
+     * The client a child wears while it is torn down. Not a bare `WebViewClient()`: every
+     * WebView in the process shares one renderer, and when it dies Chromium calls
+     * `onRenderProcessGone` on EVERY live WebView's client — the base implementation
+     * returns false, and a single false anywhere kills the whole app, whatever the main
+     * WebView's client answered. A child between `release()` and the end of `destroy()`
+     * (or one Chromium still holds a reference to for a frame) must therefore answer
+     * true too. There is nothing to clean up here: the child is already being destroyed.
+     */
+    private object InertClient : WebViewClient() {
+        override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean = true
+    }
+
     /** One URL per child, from whichever callback Chromium fires first. */
     private inner class CapturingClient(private val child: WebView) : WebViewClient() {
+
+        /**
+         * The shared renderer died under this child (see [InertClient] for why a false here
+         * would take the process down with it). The child is useless now — a crashed
+         * WebView must be destroyed, never reused — so it is released on the spot; the main
+         * WebView's own client rebuilds the page. `release` is safe from inside this
+         * callback: Chromium has already torn the renderer down, so there is no navigation
+         * stack to be inside of.
+         */
+        override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
+            release(child)
+            return true
+        }
 
         private var captured = false
 

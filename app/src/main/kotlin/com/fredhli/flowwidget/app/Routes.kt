@@ -16,8 +16,18 @@ object Routes {
 
     const val DEFAULT_ROUTE = "#/flow"
 
-    /** `scheme://authority` — the part of a URL an origin is made of. */
-    private val AUTHORITY = Regex("^([A-Za-z][A-Za-z0-9+.-]*)://([^/?#]*)")
+    /**
+     * `scheme://authority` — the part of a URL an origin is made of.
+     *
+     * The authority ends at the first of `/ ? #` — and `\`: the WHATWG URL parser Chromium
+     * uses treats a backslash in a special-scheme (http/https) URL as a path separator, so
+     * "https://evil.com\@dashboard.fredhli.com/" navigates to evil.com with a path of
+     * "/@dashboard.fredhli.com/". RFC 3986 knows no such rule, which is why a parser that
+     * stops only at `/ ? #` sees "evil.com\" as userinfo and answers dashboard.fredhli.com.
+     * This is a security boundary (isAppOrigin gates the cookie-scoped fetch, the bridge and
+     * the App Link route), so the origin here must be the one Chromium navigates to.
+     */
+    private val AUTHORITY = Regex("^([A-Za-z][A-Za-z0-9+.-]*)://([^/?#\\\\]*)")
 
     /**
      * "https://host[:port]" — lowercased scheme+host, explicit port kept only if non-default;

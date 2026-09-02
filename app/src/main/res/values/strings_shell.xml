@@ -10,6 +10,9 @@
     <string name="shell_ssl_error">The connection is not secure.</string>
     <string name="shell_http_error">The server answered %1$d.</string>
     <string name="shell_renderer_crashed">The page crashed and was reloaded.</string>
+    <!-- A load that never became a page: a navigation that never started, a document
+         served where a page was expected, a redirect off the app every time. -->
+    <string name="shell_load_stalled">The page did not load.</string>
     <string name="diag_title">Diagnostics</string>
     <string name="diag_copy">Copy</string>
     <string name="diag_again">Run again</string>

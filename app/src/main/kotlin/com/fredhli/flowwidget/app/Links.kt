@@ -1,7 +1,10 @@
 package com.fredhli.flowwidget.app
 
+import android.app.Activity
 import android.content.ActivityNotFoundException
+import android.content.ComponentName
 import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -30,8 +33,8 @@ import java.net.URLDecoder
  *   Local unit tests run against the `android.jar` stub whose every method throws, which is
  *   why the classification does not touch `android.net.Uri` and why the URL is parsed by
  *   hand where `java.net.URI` is too strict.
- * - The Android half — [leave], [openExternal], [openIntentUri], [openOtherScheme] — only
- *   dispatches on a decision already made.
+ * - The Android half — [leave], [openExternal], [openInBrowser], [openIntentUri],
+ *   [openOtherScheme] — only dispatches on a decision already made.
  *
  * Secrets: a URL that reaches here may carry `?k=<token>` (the dashboard's `apiURL()`
  * appends it), so nothing in this file logs a URL, puts one in an exception message, or
@@ -146,9 +149,17 @@ object Links {
      * URISyntaxException there and an ordinary link here), and for some hosts it parses but
      * reports `host == null` (an underscore in a label). Either way the URL is still a real
      * navigation that has to be classified, so the fallback takes the authority by hand:
-     * everything between "://" and the first of "/?#", userinfo dropped at the LAST '@' —
+     * everything between "://" and the first of "/?#\", userinfo dropped at the LAST '@' —
      * which is exactly the trick "https://dashboard.fredhli.com@evil.com/" relies on, and
      * why the split is at the last one.
+     *
+     * The backslash is in that terminator set on purpose. Chromium parses http(s) URLs per
+     * the WHATWG URL Standard, where `\` in a special-scheme URL is a path separator: it
+     * navigates "https://evil.com\@dashboard.fredhli.com/" to evil.com. `java.net.URI`
+     * rejects the backslash (which is how such a URL reaches this branch at all), and a
+     * hand parse that stopped only at "/?#" would take "evil.com\" for userinfo and call
+     * the URL IN_APP — a cookie-scoped fetch and the bridge would then follow the WebView
+     * to evil.com. Routes.originOf makes the same cut for the same reason.
      */
     private fun parseHttp(url: String, scheme: String): HttpParts? {
         try {
@@ -166,7 +177,7 @@ object Links {
         val afterScheme = url.substring(scheme.length + 1)
         if (!afterScheme.startsWith("//")) return null
         val rest = afterScheme.substring(2)
-        val authorityEnd = rest.indexOfAny(charArrayOf('/', '?', '#')).let { if (it < 0) rest.length else it }
+        val authorityEnd = rest.indexOfAny(charArrayOf('/', '?', '#', '\\')).let { if (it < 0) rest.length else it }
         var authority = rest.substring(0, authorityEnd)
         authority = authority.substringAfterLast('@')
         if (authority.isEmpty()) return null
@@ -234,20 +245,37 @@ object Links {
      *  1. ACTION_VIEW + FLAG_ACTIVITY_REQUIRE_NON_BROWSER — a verified native app for that
      *     link wins (YouTube, Maps, a bank); the flag makes Android throw
      *     ActivityNotFoundException instead of opening a browser, which is the signal that
-     *     there is none.
+     *     there is none. Skipped when `allowSelf` is false, see below.
      *  2. Per policy — CHROME: ACTION_VIEW aimed at [CHROME_PACKAGE]; CUSTOM_TAB: a
      *     CustomTabsIntent pinned to Chrome when it is installed, else to whatever
-     *     CustomTabsClient names; DEFAULT_BROWSER: plain ACTION_VIEW.
-     *  3. Plain ACTION_VIEW whenever Chrome / a Custom Tabs provider is missing or disabled.
-     * All intents get FLAG_ACTIVITY_NEW_TASK — the caller may be an application context or
-     * a WebView callback, and the link belongs in the browser's task, not ours. Returns
+     *     CustomTabsClient names; DEFAULT_BROWSER: straight to step 3.
+     *  3. Plain ACTION_VIEW whenever Chrome / a Custom Tabs provider is missing or disabled
+     *     — or, when `allowSelf` is false, [openBrowserOnly]: an ACTION_VIEW pinned to a
+     *     real browser package, else a chooser that excludes MainActivity.
+     *
+     * `allowSelf`: this app is the VERIFIED App Links handler for its own two hosts, so for
+     * an app-origin URL step 1 resolves to… MainActivity, and a plain ACTION_VIEW in step 3
+     * does the same. That is right for the WebView's own off-origin taps (the caller only
+     * asks for URLs that are not ours). It is wrong for the two callers whose whole point
+     * is "leave the app": the page's `Native.openExternal` on its own origin (spec §3
+     * promises the browser, even for the app's own URLs) and the widget's Browser target.
+     * Those pass `allowSelf = false` and never re-enter the shell — a `singleTask`
+     * MainActivity would otherwise just get an onNewIntent and load the URL in place,
+     * which from the user's side is a tap that did nothing.
+     *
+     * Flags: every intent started from a non-Activity context carries
+     * FLAG_ACTIVITY_NEW_TASK, because off an Activity the framework throws
+     * AndroidRuntimeException without it (which [leave] does not catch). The Custom Tab is
+     * the one case where the flag is NOT added from an Activity: see the branch. Returns
      * false only when nothing could open it.
      */
-    fun openExternal(context: Context, url: String, policy: LinkPolicy): Boolean {
+    fun openExternal(context: Context, url: String, policy: LinkPolicy, allowSelf: Boolean = true): Boolean {
         val uri = Uri.parse(url)
-        val nonBrowser = Intent(Intent.ACTION_VIEW, uri)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REQUIRE_NON_BROWSER)
-        if (tryStart(context, nonBrowser)) return true
+        if (allowSelf) {
+            val nonBrowser = Intent(Intent.ACTION_VIEW, uri)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REQUIRE_NON_BROWSER)
+            if (tryStart(context, nonBrowser)) return true
+        }
 
         when (policy) {
             LinkPolicy.CHROME -> {
@@ -262,7 +290,17 @@ object Links {
                 if (provider != null) {
                     val tab = CustomTabsIntent.Builder().build()
                     tab.intent.setPackage(provider)
-                    tab.intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    // A Custom Tab is meant to live in OUR task: Chrome's CustomTabActivity
+                    // declares taskAffinity="" precisely so it stacks on the caller and
+                    // Back/the X returns to the page with no second Recents card. Adding
+                    // NEW_TASK from an Activity would make Android spawn a separate task
+                    // for it — a second "Dashboard Flow" card in Recents and a tab that
+                    // survives the app being swiped away. The flag is added only when the
+                    // caller is not an Activity at all (a WebView callback wrapped in an
+                    // application context, a Service), where it is mandatory: without it
+                    // startActivity throws AndroidRuntimeException, which is not one of
+                    // the exceptions leave() catches.
+                    if (activityOf(context) == null) tab.intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     try {
                         tab.launchUrl(context, uri)
                         return true
@@ -276,8 +314,77 @@ object Links {
             LinkPolicy.DEFAULT_BROWSER -> Unit // step 3 is the whole policy
         }
 
+        if (!allowSelf) return openBrowserOnly(context, uri)
         val plain = Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         return tryStart(context, plain)
+    }
+
+    /**
+     * The widget's "Browser" target and anything else that must open a URL in a browser
+     * and NEVER in this app, whatever App Links say. [openExternal] with `allowSelf = false`
+     * — the policy ladder without the two steps that can resolve to MainActivity.
+     *
+     * Started from the application context on purpose, so every intent (the Custom Tab
+     * included) carries NEW_TASK: the caller is OpenItemActivity, a `noHistory`,
+     * `taskAffinity=""` trampoline that finishes as soon as it has fired. A Custom Tab
+     * allowed to stack on THAT task would be left as the sole activity of a task built to
+     * be thrown away (excluded from Recents, no affinity) — the browser page belongs in
+     * the browser's own task, the way a tap on a link in any other app puts it there.
+     */
+    fun openInBrowser(context: Context, url: String, policy: LinkPolicy): Boolean =
+        openExternal(context.applicationContext ?: context, url, policy, allowSelf = false)
+
+    /**
+     * ACTION_VIEW on [uri] aimed at a browser package, resolved WITHOUT the URL's host, so
+     * that App Links verification (which is what makes this app the handler for its own
+     * hosts) cannot take part. The probe is `ACTION_VIEW https:` + BROWSABLE — a bare
+     * scheme with no host: browsers declare `<data android:scheme="https"/>` with no host
+     * and match it; this app's own filter names its hosts and does not. Resolution order:
+     *
+     *  1. The user's default browser (`resolveActivity` + MATCH_DEFAULT_ONLY). When there is
+     *     none, the framework answers with its own resolver activity (package "android"),
+     *     which is not a browser and is skipped.
+     *  2. Every browser that answers the probe: Chrome first when it is among them (the
+     *     decided default for this app), else whichever is first.
+     *  3. A system chooser with MainActivity struck off it (EXTRA_EXCLUDE_COMPONENTS) —
+     *     the phone has no visible browser, or nothing answered; the user picks.
+     *
+     * Visibility: the manifest's `<queries>` already declares ACTION_VIEW + BROWSABLE +
+     * https, which is what lets `queryIntentActivities` see browsers at all on API 30+.
+     * `CATEGORY_BROWSABLE` on the real intent would NOT do on its own: this app's own
+     * filter carries BROWSABLE too, so it would still be a candidate — the package is
+     * what has to be pinned.
+     */
+    private fun openBrowserOnly(context: Context, uri: Uri): Boolean {
+        val pm = context.packageManager
+        val probe = Intent(Intent.ACTION_VIEW, Uri.fromParts(uri.scheme ?: "https", "", null))
+            .addCategory(Intent.CATEGORY_BROWSABLE)
+        val self = context.packageName
+        val candidates = LinkedHashSet<String>()
+        runCatching { pm.resolveActivity(probe, PackageManager.MATCH_DEFAULT_ONLY) }.getOrNull()
+            ?.activityInfo?.packageName
+            ?.takeIf { it != "android" && it != self }
+            ?.let { candidates.add(it) }
+        val all = runCatching { pm.queryIntentActivities(probe, PackageManager.MATCH_DEFAULT_ONLY) }
+            .getOrNull().orEmpty()
+            .mapNotNull { it.activityInfo?.packageName }
+            .filter { it != self }
+        if (CHROME_PACKAGE in all) candidates.add(CHROME_PACKAGE)
+        candidates.addAll(all)
+
+        for (pkg in candidates) {
+            val pinned = Intent(Intent.ACTION_VIEW, uri).setPackage(pkg).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            if (tryStart(context, pinned)) return true
+        }
+
+        val plain = Intent(Intent.ACTION_VIEW, uri)
+        val chooser = Intent.createChooser(plain, null)
+            .putExtra(
+                Intent.EXTRA_EXCLUDE_COMPONENTS,
+                arrayOf(ComponentName(context, MainActivity::class.java)),
+            )
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        return tryStart(context, chooser)
     }
 
     /**
@@ -345,6 +452,19 @@ object Links {
         context.packageManager.getApplicationInfo(packageName, 0).enabled
     } catch (_: PackageManager.NameNotFoundException) {
         false
+    }
+
+    /**
+     * The Activity behind a Context, unwrapping ContextWrappers (a ContextThemeWrapper, the
+     * context a WebView hands its callbacks), or null for an application / service context.
+     * `context is Activity` alone is not enough — the WebView's context is the activity's
+     * only by convention, and a wrapper around it is still "from an Activity" as far as
+     * startActivity's NEW_TASK requirement is concerned.
+     */
+    private tailrec fun activityOf(context: Context?): Activity? = when (context) {
+        is Activity -> context
+        is ContextWrapper -> activityOf(context.baseContext)
+        else -> null
     }
 
     private fun noHandler(context: Context) = toastOnMain(context, R.string.links_no_handler)

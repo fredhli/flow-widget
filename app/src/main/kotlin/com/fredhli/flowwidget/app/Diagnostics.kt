@@ -115,8 +115,14 @@ object Diagnostics {
      * A framework AlertDialog with the two halves pretty-printed in monospace. Copy puts the
      * same text on the clipboard; Run again re-asks the page (insets change with the
      * keyboard and the fold, so one reading is rarely the interesting one).
+     *
+     * Returns the shown dialog because the caller owns it: an AlertDialog is a window
+     * attached to the activity, and an activity that finishes (or is recreated for a config
+     * change outside the manifest's list) while one is up leaks the window —
+     * "Activity has leaked window … that was originally added here" — so MainActivity
+     * dismisses it from onDestroy.
      */
-    fun show(activity: MainActivity, pageJson: String, native: JSONObject) {
+    fun show(activity: MainActivity, pageJson: String, native: JSONObject): AlertDialog {
         val page = try {
             JSONObject(pageJson)
         } catch (_: JSONException) {
@@ -135,7 +141,7 @@ object Diagnostics {
         }
         val scroll = ScrollView(activity).apply { addView(body) }
 
-        AlertDialog.Builder(activity)
+        val dialog = AlertDialog.Builder(activity)
             .setTitle(R.string.diag_title)
             .setView(scroll)
             .setPositiveButton(R.string.diag_close, null)
@@ -145,6 +151,8 @@ object Diagnostics {
                 Toast.makeText(activity, R.string.diag_copied, Toast.LENGTH_SHORT).show()
             }
             .setNegativeButton(R.string.diag_again) { _, _ -> activity.runDiagnostics() }
-            .show()
+            .create()
+        dialog.show()
+        return dialog
     }
 }

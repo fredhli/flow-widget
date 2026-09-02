@@ -60,6 +60,23 @@ class RoutesTest {
         assertEquals("http://[fd7a::1]", Routes.originOf("http://[FD7A::1]/"))
     }
 
+    @Test
+    fun `backslash ends the authority like chromium`() {
+        // WHATWG: '\' in an http(s) URL is a path separator, so Chromium navigates this to
+        // evil.com — the origin must say so, or "evil.com\" would pass for userinfo.
+        assertEquals("https://evil.com", Routes.originOf("https://evil.com\\@dashboard.fredhli.com/"))
+        assertFalse(
+            Routes.isAppOrigin(
+                "https://evil.com\\@dashboard.fredhli.com/",
+                setOf("https://dashboard.fredhli.com"),
+            ),
+        )
+        // The other way round the host is still ours; the backslash just starts the path.
+        assertEquals("https://dashboard.fredhli.com", Routes.originOf("https://dashboard.fredhli.com\\evil.com/"))
+        // An empty authority is no origin at all.
+        assertNull(Routes.originOf("https://\\evil.com/"))
+    }
+
     // ---- appOrigins / isAppOrigin -----------------------------------------------------------
 
     @Test

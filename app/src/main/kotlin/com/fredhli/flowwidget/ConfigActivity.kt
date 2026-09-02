@@ -9,6 +9,8 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.SeekBar
 import android.widget.TextView
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.glance.appwidget.updateAll
 import java.net.MalformedURLException
 import java.net.URL
@@ -48,6 +50,18 @@ class ConfigActivity : Activity() {
         ) ?: AppWidgetManager.INVALID_APPWIDGET_ID
 
         setContentView(R.layout.activity_config)
+        // targetSdk 36 (2.0.0): every window is edge-to-edge with no opt-out, and this
+        // plain framework theme pads nothing for it — the title would sit under the
+        // status bar and Save under the gesture bar. Bars + cutout (the manifest's cutout
+        // mode is ALWAYS) become padding on the ScrollView, so the bar regions keep the
+        // window background and the column scrolls between them. Same listener as
+        // AppSettingsActivity; insets passed through, never consumed (spec §5).
+        val root = findViewById<View>(R.id.config_root)
+        ViewCompat.setOnApplyWindowInsetsListener(root) { v, insets ->
+            val b = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
+            v.setPadding(b.left, b.top, b.right, b.bottom)
+            insets
+        }
         baseField = findViewById(R.id.base_url)
         tokenField = findViewById(R.id.token)
         lightBar = findViewById(R.id.opacity_light)

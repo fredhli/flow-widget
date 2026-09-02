@@ -1,7 +1,9 @@
 package com.fredhli.flowwidget.app
 
+import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.content.res.Configuration
 import android.os.Bundle
 import android.os.Handler
@@ -19,9 +21,11 @@ import androidx.activity.enableEdgeToEdge
 import androidx.core.graphics.Insets as GraphicsInsets
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.emptyPreferences
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
@@ -72,6 +76,14 @@ class MainActivity : ComponentActivity() {
 
         /** The splash never outlives this, page or no page. */
         private const val SPLASH_MAX_MS = 3000L
+
+        /**
+         * A load() whose navigation has not even STARTED after this long is treated as one
+         * that never will (see [loadWatchdog]). Generous on purpose: a slow network still
+         * fires onPageStarted within a second or two, because that callback marks the start
+         * of the request, not the arrival of the response.
+         */
+        private const val LOAD_WATCHDOG_MS = 10_000L
 
         /** Saved-state key: the last app-origin URL, query stripped, restored after process death. */
         private const val STATE_LAST_URL = "lastUrl"
@@ -129,11 +141,34 @@ class MainActivity : ComponentActivity() {
     private var pendingUrl: String? = null
     private var pendingDiagnostics = false
 
+    /**
+     * The diagnostics dialog while one is up. Owned here because an AlertDialog is a window
+     * on this activity, and one still showing when the activity is destroyed (a config
+     * change outside the manifest's list, the task swiped away) leaks it; onDestroy takes
+     * it down.
+     */
+    private var diagnosticsDialog: AlertDialog? = null
+
     /** Last app-origin main-frame URL started or visited — what Retry and a crash reload. */
     private var lastUrl: String? = null
 
     /** Main-frame URL whose load failed; onPageFinished for it means "error page shown". */
     private var errorUrl: String? = null
+
+    /**
+     * The URL the current load() asked for, and whether Chromium has reported a navigation
+     * for it. Together they make LOADING non-terminal: a main-frame request that turns
+     * into a download (Content-Disposition: attachment, a PDF under a path the classifier
+     * did not recognise as a document) never reaches onPageStarted / onPageFinished /
+     * onReceivedError, so without this the state machine would sit in LOADING forever —
+     * every later warm intent parked behind a load that ended in the DownloadListener.
+     * [onDownloadStarted] is the deterministic way back; [loadWatchdog] the backstop.
+     */
+    private var loadingUrl: String? = null
+    private var navigationStarted = false
+
+    /** Retry-once guard for the origin-mismatch reload in [onPageFinished]. */
+    private var mismatchReloads = 0
 
     /** Intent that arrived before the WebView existed, and whether its extras are stale. */
     private var deferredIntent: Intent? = null
@@ -147,13 +182,57 @@ class MainActivity : ComponentActivity() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val releaseSplash = Runnable { keepSplash = false }
 
+    /**
+     * Backstop for a load() Chromium never reported on (see [loadingUrl]). Posted by every
+     * load(), cancelled by onPageStarted (the navigation exists — from there on the
+     * WebViewClient reports how it ends), onPageFinished, showError, onDestroy and the
+     * next load(). When it fires with the navigation still unstarted, the target is given
+     * up on and the page goes back to where it was (or home) — never to NONE, which would
+     * only wait for the next onResume.
+     */
+    private val loadWatchdog = Runnable {
+        if (state != PageState.LOADING || navigationStarted) return@Runnable
+        val abandoned = loadingUrl
+        pendingUrl = null
+        loadingUrl = null
+        val current = webView ?: return@Runnable
+        val fallback = recoveryUrl(abandoned) ?: return@Runnable
+        if (fallback == abandoned) {
+            // The fallback itself is what never started: nothing left to try. The panel's
+            // Retry re-runs load() from lastUrl / home.
+            showError(getString(R.string.shell_load_stalled), abandoned)
+            return@Runnable
+        }
+        load(current, fallback)
+    }
+
+    /**
+     * Bar icon appearance as the page last reported it through Native.themeColor (true =
+     * light bars, dark icons), or null before the first report. Kept because
+     * enableEdgeToEdge() — run again on every handled uiMode change — re-derives the flags
+     * from the system night state, and the page only re-reports on boot, on its own theme
+     * cycle and on a prefers-color-scheme change: a page pinned to dark under a system
+     * that just flipped to light would otherwise get dark icons on a dark bar until the
+     * next report. Cleared when a new document starts (load / WebView replacement): that
+     * document reports its own colour on boot, and until then the system-derived value is
+     * the better guess for the shell surfaces (error panel, blank WebView) it paints over.
+     */
+    private var pageBarsLight: Boolean? = null
+
     // ---- insets (spec §5) -----------------------------------------------------------------
     private var imeMode = Insets.ImeMode.NATIVE
     private var lastBars: GraphicsInsets = GraphicsInsets.NONE
     private var lastIme: GraphicsInsets = GraphicsInsets.NONE
     private var safeVarFallback = false
 
-    /** Run the env() probe on the next READY — set by every document load. */
+    /**
+     * Run the env() probe on the next READY. Set by load() AND by every main-frame
+     * onPageStarted on an app origin: a document can start without load() — the server's
+     * 401 → /login redirect and the sign-in that follows, an in-app link the WebView
+     * navigates itself, a captured popup routed through loadUrl, pushRoute's location.href
+     * for a path change — and each new document starts with a clean <html style>, so the
+     * `--safe-*` fallback decided for the previous one has to be re-probed and re-pushed.
+     */
     private var envProbePending = false
 
     /**
@@ -238,11 +317,13 @@ class MainActivity : ComponentActivity() {
             it.onResume()
             it.resumeTimers()
         }
-        // Nothing loaded yet but everything needed is here (can happen when the store
-        // emitted while the unconfigured panel was up and no intent was pending).
+        // Nothing loaded yet but everything needed is here: the store emitted while the
+        // unconfigured panel was up and no intent was pending (pendingUrl == null), or the
+        // renderer died while the activity was stopped and onRendererGone parked its
+        // target here instead of loading into a WebView nobody could see (pendingUrl set).
         val cfg = config
-        if (webView != null && cfg != null && state == PageState.NONE && pendingUrl == null) {
-            pendingUrl = homeUrl(cfg)
+        if (webView != null && cfg != null && state == PageState.NONE) {
+            if (pendingUrl == null) pendingUrl = homeUrl(cfg)
             applyPending()
         }
     }
@@ -266,9 +347,13 @@ class MainActivity : ComponentActivity() {
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        // uiMode flipped: re-derive the bar icon colours from the new night state (the page
-        // will also report its own colour through Native.themeColor shortly).
+        // uiMode flipped: re-derive the bar icon colours from the new night state — then
+        // put the page's own report back on top. enableEdgeToEdge() only knows the system
+        // theme, and the page does NOT re-report on a fold or rotation (its listener is on
+        // prefers-color-scheme, which an unfold does not change): a page pinned to the
+        // opposite of the system theme would keep the wrong icons until its next boot.
         enableEdgeToEdge()
+        pageBarsLight?.let { applyBarAppearance(it) }
         webView?.let { DashboardWebView.applyTextZoom(it, prefs.textZoom, newConfig.fontScale) }
         // Resources resolved at inflate time do not follow a handled uiMode change on
         // their own; the two surfaces that could show a light colour on a dark page are
@@ -280,16 +365,47 @@ class MainActivity : ComponentActivity() {
         val ta = obtainStyledAttributes(
             intArrayOf(android.R.attr.textColorPrimary, android.R.attr.textColorSecondary),
         )
+        val primary: ColorStateList?
         try {
-            ta.getColorStateList(0)?.let { errorTitle.setTextColor(it) }
+            primary = ta.getColorStateList(0)
+            primary?.let { errorTitle.setTextColor(it) }
             ta.getColorStateList(1)?.let { errorText.setTextColor(it) }
         } finally {
             ta.recycle()
+        }
+        // The two buttons likewise: their background and text colour were resolved from
+        // ?attr/buttonStyle at inflate time and stay at the old night state — a light
+        // button with light text on the re-resolved dark panel. Re-resolve the style's
+        // background and textColor for the new configuration; getDrawable hands out a
+        // fresh Drawable per call, which matters because a Drawable can have one owner.
+        // A style that colours its text through textAppearance alone (Material's does)
+        // answers null for textColor, in which case the theme's textColorPrimary — what
+        // that textAppearance resolves to — is used. (Attribute ids in ascending order, as
+        // obtainStyledAttributes documents.)
+        val btnTa = obtainStyledAttributes(
+            null,
+            intArrayOf(android.R.attr.textColor, android.R.attr.background),
+            android.R.attr.buttonStyle,
+            0,
+        )
+        try {
+            val textColor = btnTa.getColorStateList(0) ?: primary
+            for (b in arrayOf(errorRetry, errorSettings)) {
+                btnTa.getDrawable(1)?.let { b.background = it }
+                textColor?.let { b.setTextColor(it) }
+            }
+        } finally {
+            btnTa.recycle()
         }
     }
 
     override fun onDestroy() {
         mainHandler.removeCallbacks(releaseSplash)
+        mainHandler.removeCallbacks(loadWatchdog)
+        // A dialog still up is a window on this activity; take it down before the
+        // activity goes, or the framework logs a leaked window and keeps the view tree.
+        diagnosticsDialog?.dismiss()
+        diagnosticsDialog = null
         if (::popupCatcher.isInitialized) popupCatcher.destroy()
         webView?.let {
             webContainer.removeView(it)
@@ -297,6 +413,19 @@ class MainActivity : ComponentActivity() {
         }
         webView = null
         super.onDestroy()
+    }
+
+    /**
+     * Light (true) or dark (false) status + navigation bar icons, as the page reports its
+     * surface colour (Bridge, Native.themeColor). The value is remembered so a later
+     * enableEdgeToEdge() — every handled uiMode change runs one — can be overridden again
+     * with the page's answer rather than the system theme's guess.
+     */
+    internal fun applyBarAppearance(light: Boolean) {
+        pageBarsLight = light
+        val controller = WindowCompat.getInsetsController(window, window.decorView)
+        controller.isAppearanceLightStatusBars = light
+        controller.isAppearanceLightNavigationBars = light
     }
 
     // =========================================================================================
@@ -387,6 +516,19 @@ class MainActivity : ComponentActivity() {
         webView = fresh
         state = PageState.NONE
         errorUrl = null
+        // A WebView is born "resumed"; the activity may not be. Mirror the activity's
+        // state onto it, because onResume/onPause only touch the WebView that exists
+        // when they run: one created while the activity is stopped (a renderer crash
+        // in the background) would otherwise run its timers and JS behind a stopped
+        // activity — and, worse, a WebView created while paused and never paused stays
+        // out of step with the next onResume's resumeTimers, which is process-global.
+        if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+            fresh.onResume()
+            fresh.resumeTimers()
+        } else {
+            fresh.onPause()
+            fresh.pauseTimers()
+        }
         refreshBack()
         return fresh
     }
@@ -398,18 +540,33 @@ class MainActivity : ComponentActivity() {
             webContainer.removeView(old)
             old.destroy()
         }
+        // No document any more, so no page-reported bar colour either (see pageBarsLight).
+        pageBarsLight = null
         return attachFreshWebView()
     }
 
-    /** onRenderProcessGone: the crashed view is unusable; rebuild and reload where we were. */
+    /**
+     * onRenderProcessGone: the crashed view is unusable; rebuild and reload where we were.
+     * The rebuild happens whatever the activity's state (a crashed WebView must go), but
+     * the reload only when the activity is at least STARTED: Chromium may kill a
+     * background renderer to reclaim memory precisely because the app is not visible, and
+     * loading straight into a fresh WebView behind a stopped activity would spend the
+     * network and the renderer on a page nobody sees — and with the page paused (see
+     * attachFreshWebView) it may not even finish. Parked in pendingUrl instead, which
+     * onResume turns into the load (state is NONE after the rebuild).
+     */
     internal fun onRendererGone(view: WebView) {
         if (view !== webView) return // a view already replaced; nothing left to do for it
         val fresh = replaceWebView()
         seedCookie(fresh)
+        val target = pendingUrl ?: lastUrl ?: homeUrl()
+        if (!lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+            pendingUrl = target
+            return
+        }
         hidePanel()
         Toast.makeText(this, R.string.shell_renderer_crashed, Toast.LENGTH_SHORT).show()
-        val target = pendingUrl ?: lastUrl ?: homeUrl() ?: return
-        load(fresh, target)
+        load(fresh, target ?: return)
     }
 
     // =========================================================================================
@@ -430,6 +587,7 @@ class MainActivity : ComponentActivity() {
         }
         val fromHistory = stale ||
             ((intent?.flags ?: 0) and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0
+        val before = pendingUrl
         if (!fromHistory) {
             if (intent?.getBooleanExtra(EXTRA_DIAGNOSTICS, false) == true) pendingDiagnostics = true
             val route = intent?.getStringExtra(EXTRA_ROUTE)
@@ -437,14 +595,18 @@ class MainActivity : ComponentActivity() {
             when {
                 route != null -> pendingUrl = Routes.pageUrl(cfg.baseUrl, route)
                 intent?.action == Intent.ACTION_VIEW && data != null -> {
+                    // The same gate every tap goes through (spec §6): only an IN_APP URL
+                    // becomes the page. An app-origin /api/ URL is a DOCUMENT — the App
+                    // Links filter matches it too (the manifest cannot exclude a path
+                    // prefix), and loading it would put the WebView on a PDF or a raw
+                    // brief with the shell stuck in LOADING; Links.leave fetches and
+                    // opens it like a tap would. Anything else (an off-origin URL from a
+                    // caller addressing the component directly, an intent: URL) goes to
+                    // its handler the same way, and the shell keeps showing a page below.
                     val target = data.toString()
-                    if (Routes.isAppOrigin(target, appOrigins)) {
-                        pendingUrl = target
-                    } else {
-                        // Not ours (the manifest filter should make this impossible, but a
-                        // caller can address the component directly): the browser has it,
-                        // and the shell still shows a page below.
-                        Links.openExternal(this, target, prefs.linkPolicy)
+                    when (val nav = Links.classify(target, appOrigins)) {
+                        Links.Nav.IN_APP -> pendingUrl = target
+                        else -> Links.leave(this, target, prefs.linkPolicy, nav)
                     }
                 }
             }
@@ -455,6 +617,8 @@ class MainActivity : ComponentActivity() {
             pendingUrl = restoredUrl?.takeIf { Routes.isAppOrigin(it, appOrigins) } ?: homeUrl(cfg)
         }
         restoredUrl = null
+        // A new target gets its own one-shot origin-mismatch retry (onPageFinished).
+        if (pendingUrl != before) mismatchReloads = 0
         applyPending()
     }
 
@@ -485,9 +649,74 @@ class MainActivity : ComponentActivity() {
         hidePanel()
         errorUrl = null
         envProbePending = true
+        // A new document: its own boot reports the bar colour (see pageBarsLight).
+        pageBarsLight = null
         if (Routes.isAppOrigin(url, appOrigins)) seedCookie(target)
         state = PageState.LOADING
+        loadingUrl = url
+        navigationStarted = false
+        mainHandler.removeCallbacks(loadWatchdog)
+        mainHandler.postDelayed(loadWatchdog, LOAD_WATCHDOG_MS)
         target.loadUrl(url)
+    }
+
+    /**
+     * Where to go when a load() has to be abandoned (its response was a download, or it
+     * never started): the last page, unless the last page IS the abandoned URL (a document
+     * URL that reached onPageStarted before the DownloadListener took it), else home.
+     */
+    private fun recoveryUrl(abandoned: String?): String? =
+        lastUrl?.takeIf { Routes.stripFragment(it) != Routes.stripFragment(abandoned) } ?: homeUrl()
+
+    /**
+     * The WebView's DownloadListener fired (via DashboardWebView). In a READY page that is
+     * an `<a download>` or an attachment response and none of the shell's business. While
+     * LOADING it is, in practice, the fate of the navigation in flight — a main-frame
+     * response Chromium turned into a download (Content-Disposition: attachment, a PDF
+     * under a path the classifier did not call a document, a 302 from a page URL onto
+     * one), about which it reports nothing more: no onPageFinished, no error. The file
+     * has gone to Files through the listener already; here the state machine is put back
+     * on a page, or it would wait in LOADING for ever with every later intent parked.
+     *
+     * "Which page" comes from the WebView itself rather than from URL matching, because a
+     * redirect chain ends on a URL nobody asked for: `getUrl()` is the visible URL — the
+     * committed document for a renderer-initiated navigation (a tap), the pending one for
+     * loadUrl — so an app-origin URL there that is not the download is a page that is
+     * shown, or is still on its way and will confirm itself through onPageFinished
+     * (setting READY early for it is harmless; a wrong reload would not be). No such
+     * page: the pending intent's URL if it is a different one, else the last page, else
+     * home — and never the URL whose load produced this download, which would loop.
+     */
+    internal fun onDownloadStarted(view: WebView, url: String) {
+        if (view !== webView || state != PageState.LOADING) return
+        val loading = loadingUrl
+        mainHandler.removeCallbacks(loadWatchdog)
+        loadingUrl = null
+        // A pending target that IS the download is done with (pushing it into a page
+        // would only fetch the file a second time); any other pending target stands.
+        val next = pendingUrl?.takeIf { Routes.stripFragment(it) != Routes.stripFragment(url) }
+        pendingUrl = next
+        val shown = view.url?.takeIf {
+            Routes.isAppOrigin(it, appOrigins) && Routes.stripFragment(it) != Routes.stripFragment(url)
+        }
+        if (shown != null) {
+            state = PageState.READY
+            keepSplash = false
+            hidePanel()
+            refreshBack()
+            applyPending()
+            return
+        }
+        if (next != null) {
+            load(view, next)
+            return
+        }
+        val fallback = recoveryUrl(url)
+        if (fallback == null || fallback == loading) {
+            showError(getString(R.string.shell_load_stalled), url)
+            return
+        }
+        load(view, fallback)
     }
 
     /**
@@ -522,16 +751,37 @@ class MainActivity : ComponentActivity() {
     internal fun onPageStarted(view: WebView, url: String?) {
         if (view !== webView) return
         state = PageState.LOADING
-        if (Routes.isAppOrigin(url, appOrigins)) lastUrl = url
+        // The navigation exists: from here on the WebViewClient says how it ends.
+        navigationStarted = true
+        mainHandler.removeCallbacks(loadWatchdog)
+        // Only a PAGE is worth coming back to. An app-origin document URL (/api/…) can
+        // start here too — the App Links path is classified now, but a link inside the
+        // page or a redirect can still be one — and remembering it would make Retry and
+        // a crash reload fetch the file again instead of showing a page.
+        if (Links.classify(url, appOrigins) == Links.Nav.IN_APP) lastUrl = url
+        // Every app-origin document gets its own env() probe (see envProbePending): a
+        // navigation that did not come through load() — the 401 → /login redirect, the
+        // sign-in, an in-app link, a popup routed to loadUrl, pushRoute's location.href —
+        // is a new <html> with no inline `--safe-*` on it.
+        if (Routes.isAppOrigin(url, appOrigins)) envProbePending = true
         bridge.onPageStarted(view, url)
     }
 
-    internal fun onPageCommitVisible() {
+    /**
+     * First paint of the new document: the splash may go. Also the earliest moment the
+     * new <html> exists to take the `--safe-*` fallback, when the previous document
+     * needed it — pushed here as well as at READY so the bar padding does not visibly
+     * jump in on a page that painted first with env() at zero.
+     */
+    internal fun onPageCommitVisible(view: WebView) {
         keepSplash = false
+        if (view === webView && safeVarFallback) pushSafeInsets()
     }
 
     internal fun onPageFinished(view: WebView, url: String?) {
         if (view !== webView) return
+        mainHandler.removeCallbacks(loadWatchdog)
+        loadingUrl = null
         refreshBack()
         // Chromium finishes its built-in error page under the URL that failed: that is
         // not READY, and the panel already says why.
@@ -548,13 +798,29 @@ class MainActivity : ComponentActivity() {
         if (target != null) {
             if (Routes.originOf(url) == Routes.originOf(target)) {
                 pendingUrl = null
+                mismatchReloads = 0
                 // The cold load of the target itself needs no push; a warm arrival does.
                 if (url != target) pushRoute(view, target)
-            } else {
+            } else if (mismatchReloads == 0) {
+                // The document that finished is not on the target's origin (a redirect
+                // off the app, the origin change of a base-URL edit): load the target
+                // itself — ONCE. A second finish on the wrong origin means the server
+                // sends the target elsewhere every time, and reloading it again would
+                // be the loop the panel exists to stop.
+                mismatchReloads = 1
                 load(view, target)
+                return
+            } else {
+                pendingUrl = null
+                mismatchReloads = 0
+                showError(getString(R.string.shell_load_stalled), target)
                 return
             }
         }
+        // Belt and braces for the `--safe-*` fallback: onPageCommitVisible pushed it as
+        // soon as the document existed; pushed again now the page is READY, in case the
+        // document replaced its <html> style between the two (cheap, idempotent).
+        if (safeVarFallback) pushSafeInsets()
         if (envProbePending) {
             envProbePending = false
             runEnvProbe(view)
@@ -585,6 +851,9 @@ class MainActivity : ComponentActivity() {
         val already = errorPanel.visibility == View.VISIBLE && errorUrl != null &&
             Routes.stripFragment(errorUrl) == Routes.stripFragment(failedUrl)
         if (already) return
+        // The load ended (badly); the watchdog for it has nothing left to catch.
+        mainHandler.removeCallbacks(loadWatchdog)
+        loadingUrl = null
         errorUrl = failedUrl
         state = PageState.ERROR
         keepSplash = false
@@ -747,12 +1016,24 @@ class MainActivity : ComponentActivity() {
     internal fun runDiagnostics() {
         val current = webView
         if (current == null) {
-            Diagnostics.show(this, "null", diagnosticsNativeJson())
+            showDiagnostics(Diagnostics.show(this, "null", diagnosticsNativeJson()))
             return
         }
         current.evaluateJavascript(Diagnostics.JS_METRICS) { raw ->
             if (isFinishing || isDestroyed) return@evaluateJavascript
-            Diagnostics.show(this, Diagnostics.unquote(raw), diagnosticsNativeJson())
+            showDiagnostics(Diagnostics.show(this, Diagnostics.unquote(raw), diagnosticsNativeJson()))
         }
+    }
+
+    /**
+     * Take ownership of a diagnostics dialog just shown: at most one is up at a time
+     * ("Run again" opens a new one from the old one's button — the old one is already on
+     * its way out, but dismissing it explicitly costs nothing), and the reference is
+     * dropped when the dialog goes so onDestroy does not dismiss a dead one.
+     */
+    private fun showDiagnostics(dialog: AlertDialog) {
+        diagnosticsDialog?.takeIf { it !== dialog }?.dismiss()
+        diagnosticsDialog = dialog
+        dialog.setOnDismissListener { if (diagnosticsDialog === it) diagnosticsDialog = null }
     }
 }
