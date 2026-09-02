@@ -1047,3 +1047,32 @@ conflicts, all resolved by keeping both sides except for one design decision:
   gone — it would resolve straight back into this app via App Links.
 - `versionCode` 5 / 2.0.0 (1.2.0 took 4). targetSdk stays 36.
 - 198 unit tests green (129 widget + 69 shell); release + debug builds green.
+
+## 2.0.1 — first on-device round (2026-09-02)
+
+Fred installed 2.0.0 on the Fold and sent one screenshot and four items. What changed:
+
+1. **A widget tap always opens the app.** On the phone an item tap landed in the browser;
+   on the emulator (fresh DataStore, release APK, the same `OpenItemActivity` replay) it
+   landed in `MainActivity` every time, so the cause was never reproduced — it lived in
+   something the phone's upgraded store or launcher did, not in the route code. Fred's
+   ruling made the diagnosis moot: the widget must never open a URL, the app *is* the
+   phone's dashboard. `TapTarget` is gone (ShellPrefs, FlowStore, both settings screens,
+   the widget config's "Open links with" spinner, `WidgetSettings.LINK_*`); round 3's
+   `link_app` key may still sit in an old store and is simply not read. `OpenItemActivity`
+   has one path: an explicit intent to `MainActivity` at `Routes.routeOf(url)`.
+2. **Expand mode shows the body.** The widget slice (`/api/flow/widget`) carried no bodies —
+   a dashboard rule, "what a phone polls every 30 minutes" — so every expanded row read
+   "—". The slice now carries `body` for its one batch (dashboard `flow.py`, its test and
+   CLAUDE.md updated; the server needs a restart to serve it). The expanded text is its own
+   tap target into the app, so expand mode is not a dead end.
+3. **Named "Dashboard", with the dashboard's icon** — the site's four-tile mark on its blue
+   (`#2563EB`), generated from `web/icon-maskable.svg` by
+   `~/flow-widget-support/gen-launcher-icon.py`; the splash follows automatically.
+4. **Header inset**: "Flow" and the age label sit 16dp in from the container padding (the
+   rows' corner radius, i.e. on the corner circle's centre) and 3dp lower.
+
+Rule recorded in dashboard/CLAUDE.md: the app is the phone's front door and the browser is
+the PC's, both stay, so a site UI/UX change is verified in the app too.
+
+`versionCode 6`, `versionName 2.0.1`. Unit tests 183 (release) / 197 (debug), 0 failures.

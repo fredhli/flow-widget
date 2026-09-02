@@ -38,7 +38,6 @@ import kotlinx.coroutines.runBlocking
  */
 class AppSettingsActivity : Activity() {
 
-    private lateinit var tapGroup: RadioGroup
     private lateinit var linkGroup: RadioGroup
     private lateinit var zoomGroup: RadioGroup
 
@@ -59,7 +58,6 @@ class AppSettingsActivity : Activity() {
             insets
         }
 
-        tapGroup = findViewById(R.id.tap_target_group)
         linkGroup = findViewById(R.id.link_policy_group)
         zoomGroup = findViewById(R.id.text_zoom_group)
         val openConfig: Button = findViewById(R.id.open_config)
@@ -78,12 +76,6 @@ class AppSettingsActivity : Activity() {
         // onCheckedChanged, and a listener already in place would write the value it just
         // read back to disk on every open.
         val prefs = runBlocking { FlowStore.get(this@AppSettingsActivity).shellPrefs() }
-        tapGroup.check(
-            when (prefs.tapTarget) {
-                TapTarget.APP -> R.id.tap_app
-                TapTarget.BROWSER -> R.id.tap_browser
-            }
-        )
         linkGroup.check(
             when (prefs.linkPolicy) {
                 LinkPolicy.CHROME -> R.id.link_chrome
@@ -98,7 +90,6 @@ class AppSettingsActivity : Activity() {
         )
 
         val save = RadioGroup.OnCheckedChangeListener { _, _ -> saveCurrent() }
-        tapGroup.setOnCheckedChangeListener(save)
         linkGroup.setOnCheckedChangeListener(save)
         zoomGroup.setOnCheckedChangeListener(save)
 
@@ -126,13 +117,9 @@ class AppSettingsActivity : Activity() {
         about.text = getString(R.string.settings_about, BuildConfig.VERSION_NAME, webViewVersion)
     }
 
-    /** Read the three groups and write them as one value. */
+    /** Read both groups and write them as one value. */
     private fun saveCurrent() {
         val prefs = ShellPrefs(
-            tapTarget = when (tapGroup.checkedRadioButtonId) {
-                R.id.tap_browser -> TapTarget.BROWSER
-                else -> TapTarget.APP
-            },
             linkPolicy = when (linkGroup.checkedRadioButtonId) {
                 R.id.link_custom_tab -> LinkPolicy.CUSTOM_TAB
                 R.id.link_default_browser -> LinkPolicy.DEFAULT_BROWSER

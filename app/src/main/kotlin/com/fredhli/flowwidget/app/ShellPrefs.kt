@@ -3,12 +3,13 @@ package com.fredhli.flowwidget.app
 import kotlin.math.roundToInt
 
 /**
- * The three settings the app shell owns, and the pure functions that read them back out of
- * storage.
+ * The two settings the app shell owns, and the pure functions that read them back out of
+ * storage. (2.0.0 had a third, where a widget tap lands; since 2.0.1 a widget tap always
+ * opens the app — see OpenItemActivity — and the setting is gone.)
  *
  * Everything in this file is deliberately free of `android.*`. Local unit tests run against
  * the `android.jar` stub whose every method throws, so anything that has to be *tested*
- * — and these three are the settings a wrong value silently ruins — has to be expressible
+ * — and these are the settings a wrong value silently ruins — has to be expressible
  * in plain Kotlin. The Android side (DataStore, WebSettings, the settings screen) only ever
  * calls into here; it never re-implements a rule.
  *
@@ -43,37 +44,8 @@ enum class LinkPolicy(val storageValue: String) {
 }
 
 /**
- * Where a widget tap goes.
- *
- * Stored under the widget config screen's own key, `link_app` (FlowStore.KEY_LINK_APP,
- * added by widget round 3 as "Open links with: Dashboard app / Chrome"), with that
- * screen's vocabulary — so the two settings screens edit ONE value rather than two
- * switches that disagree. Round 3's "Dashboard app" meant "whatever Android resolves",
- * which since 2.0.0 is this app (App Links); its "Chrome" is the browser escape hatch,
- * routed through the link policy (whose default is Chrome). `WidgetSettings.linkApp` is
- * the widget side's normaliser for the same strings.
- */
-enum class TapTarget(val storageValue: String) {
-    /** MainActivity, at the tapped item's route. The default once the shell exists. */
-    APP("dashboard"),
-
-    /** The pre-2.0 behaviour: hand the URL to the browser. Kept as the escape hatch. */
-    BROWSER("chrome");
-
-    companion object {
-        val DEFAULT = APP
-
-        /** Pure. Unknown/null → DEFAULT. Case-insensitive, trimmed. */
-        fun fromStorage(value: String?): TapTarget {
-            val v = value?.trim()?.lowercase() ?: return DEFAULT
-            return entries.firstOrNull { it.storageValue == v } ?: DEFAULT
-        }
-    }
-}
-
-/**
  * The shell's settings as one value, so a caller reads them in a single DataStore snapshot
- * rather than three.
+ * rather than two.
  *
  * textZoom: 0 = follow the system font scale; otherwise a percent, clamped 50..200.
  * Zero is a distinct state rather than "100", because "follow the system" has to keep
@@ -82,7 +54,6 @@ enum class TapTarget(val storageValue: String) {
  * frozen into the stored number.
  */
 data class ShellPrefs(
-    val tapTarget: TapTarget = TapTarget.DEFAULT,
     val linkPolicy: LinkPolicy = LinkPolicy.DEFAULT,
     val textZoom: Int = 0,
 ) {

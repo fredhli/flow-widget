@@ -3,12 +3,9 @@ package com.fredhli.flowwidget
 import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.os.Bundle
-import android.util.Log
 import androidx.glance.appwidget.updateAll
-import com.fredhli.flowwidget.app.Links
 import com.fredhli.flowwidget.app.MainActivity
 import com.fredhli.flowwidget.app.Routes
-import com.fredhli.flowwidget.app.TapTarget
 import kotlinx.coroutines.runBlocking
 
 /**
@@ -17,22 +14,18 @@ import kotlinx.coroutines.runBlocking
  * where the unread-dot bookkeeping happens: record the tap time, hand the deep link on,
  * repaint the widgets so the dots clear, vanish.
  *
- * Since 2.0.0 there are two destinations, chosen by ONE setting with two front doors —
- * the widget config screen's "Open links with" (round 3) and the app settings' "Widget
- * taps open" both edit FlowStore.KEY_LINK_APP (see TapTarget). It covers every link the
- * widget can fire: the header band and, in open-dashboard tap mode, the item rows (in
- * expand mode item taps never leave the widget — ToggleItemAction, not this activity).
- * **App** (the default) starts MainActivity at the tapped item's route, and **Browser** is
- * the pre-2.0 behaviour — the same URL in a browser — kept as the escape hatch for when
- * the shell is the thing that is broken. Not the pre-2.0 CODE, though: a plain ACTION_VIEW
- * on a dashboard URL now resolves to this very app, because 2.0.0 is the verified App
- * Links handler for dashboard.fredhli.com and dashboard-chl.fredhli.com. The escape
- * hatch would lead straight back into the broken shell. `Links.openInBrowser` pins the
- * intent to a real browser package (the link policy's Chrome / Custom Tab / default
- * browser, resolved without the URL's host so App Links cannot take part) and, failing
- * every browser, offers a chooser with MainActivity struck off it.
+ * Since 2.0.1 there is ONE destination: MainActivity, at the tapped item's route. 2.0.0
+ * kept the pre-2.0 browser hand-off behind a setting ("Widget taps open: the app / the
+ * browser", stored under round 3's `link_app` key); Fred's first on-device run of 2.0.0
+ * had a widget tap land in the browser, and his answer was that the widget must never
+ * open a URL — the app IS the phone's dashboard now, the site stays for the PC. So the
+ * setting is gone, whatever an older build wrote under that key is ignored, and the only
+ * thing this activity can start is our own MainActivity (an explicit component intent, so
+ * App Links, the Chrome PWA and the default browser cannot take part). Links that leave
+ * the dashboard from INSIDE the app are a different matter — Links.openExternal and the
+ * link policy still own those.
  *
- * The URL the widget hands over is unchanged either way: `$baseUrl/#/flow` for the header
+ * The URL the widget hands over is unchanged from 1.x: `$baseUrl/#/flow` for the header
  * band, `$baseUrl/#/flow/i/<id>` for an item. `Routes.routeOf` is what turns the second
  * form back into `#/flow/i/<id>`; a URL with no usable fragment normalises to `#/flow`
  * inside `routeIntent`, which is exactly what the header band means.
@@ -46,38 +39,17 @@ class OpenItemActivity : Activity() {
         super.onCreate(savedInstanceState)
         val url = intent?.getStringExtra(EXTRA_URL)
         if (url != null && (url.startsWith("https://") || url.startsWith("http://"))) {
-            // Small and rare (one widget tap); runBlocking keeps the process from
-            // dying before the read, the write and the repaint land. The setting is read
-            // inside the same block, off the one DataStore snapshot the write follows.
+            try {
+                startActivity(MainActivity.routeIntent(this, Routes.routeOf(url)))
+            } catch (_: ActivityNotFoundException) {
+                // Our own activity, so this is only reachable if the component has been
+                // disabled by hand. Nothing sensible to do from a widget shell.
+            }
+            // Small and rare (one widget tap); runBlocking keeps the process from dying
+            // before the write and the repaint land. The tap counts as "the list was
+            // read" whether or not the shell managed to start: the dots clear either way.
             runBlocking {
                 val store = FlowStore.get(this@OpenItemActivity)
-                val shellPrefs = store.shellPrefs()
-                when (shellPrefs.tapTarget) {
-                    TapTarget.APP -> try {
-                        startActivity(
-                            MainActivity.routeIntent(
-                                this@OpenItemActivity,
-                                Routes.routeOf(url),
-                            )
-                        )
-                    } catch (_: ActivityNotFoundException) {
-                        // Our own activity, so this is only reachable if the component has
-                        // been disabled by hand. Nothing sensible to do from a widget shell.
-                    }
-
-                    TapTarget.BROWSER -> try {
-                        // openInBrowser answers false (rather than throwing) when nothing
-                        // could open it; the catch stays for the exceptions a chooser or
-                        // a Custom Tab provider can still raise on an OEM build.
-                        Links.openInBrowser(this@OpenItemActivity, url, shellPrefs.linkPolicy)
-                    } catch (_: ActivityNotFoundException) {
-                        // no browser — nothing sensible to do from a widget shell
-                    } catch (_: SecurityException) {
-                        // a browser that refuses us — same
-                    }
-                }
-                // Both paths count as "the list was read": the dots clear whether the item
-                // opened in the app or in Chrome.
                 store.recordOpen(System.currentTimeMillis())
                 FlowWidget().updateAll(this@OpenItemActivity)
             }
@@ -87,6 +59,5 @@ class OpenItemActivity : Activity() {
 
     companion object {
         const val EXTRA_URL = "com.fredhli.flowwidget.EXTRA_URL"
-        private const val TAG = "FlowOpen"
     }
 }

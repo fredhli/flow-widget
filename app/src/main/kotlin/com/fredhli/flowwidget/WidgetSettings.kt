@@ -1,8 +1,9 @@
 package com.fredhli.flowwidget
 
 /**
- * The round-3 behaviour settings (design/BRIEF.md, Round 3): three small enums stored as
- * strings in the DataStore. Pure by design so the defaults-and-migration contract is
+ * The round-3 behaviour settings (design/BRIEF.md, Round 3): two small enums stored as
+ * strings in the DataStore. (Round 3's third, "Open links with", went in 2.0.1: a widget
+ * tap always opens the app now — OpenItemActivity.) Pure by design so the defaults-and-migration contract is
  * unit-testable off-device: an ABSENT key is the shipped default (which is exactly the
  * pre-round-3 behaviour, so an upgraded install changes nothing until Fred opens the
  * config screen), and a junk value — a typo'd adb seed, a future build's renamed constant
@@ -50,20 +51,6 @@ object WidgetSettings {
     val TAP_MODES = listOf(TAP_DASHBOARD, TAP_EXPAND)
 
     fun tapMode(raw: String?): String = if (raw in TAP_MODES) raw!! else TAP_DASHBOARD
-
-    // ------------------------------------------------------------------ open links with
-
-    /** "Open links with": the plain VIEW intent (whatever the system resolves — default). */
-    const val LINK_DASHBOARD = "dashboard"
-
-    /** VIEW pinned to com.android.chrome, falling back to plain VIEW when Chrome is missing. */
-    const val LINK_CHROME = "chrome"
-
-    const val CHROME_PACKAGE = "com.android.chrome"
-
-    val LINK_APPS = listOf(LINK_DASHBOARD, LINK_CHROME)
-
-    fun linkApp(raw: String?): String = if (raw in LINK_APPS) raw!! else LINK_DASHBOARD
 
     // ------------------------------------------------------------------ read ids
 

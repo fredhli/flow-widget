@@ -357,6 +357,13 @@ private fun WidgetBody(prefs: Preferences) {
  * [WidgetBody] as the spacer under this band. Deleting the refresh glyph removed one
  * neighbouring target, not all of them: item row 1 fires a different action (that item,
  * not the feed) and is the band's new neighbour.
+ *
+ * The pair is inset 16dp from the container padding since 2.0.1 (Fred, first on-device
+ * run of 2.0.0): flush with the rows' outer edge, "Flow" read as hanging off the cards'
+ * corner; 16dp is the rows' corner radius, so the title's left edge now sits on the
+ * centre of that corner's circle, and the ago label mirrors it on the right. The 6dp of
+ * top padding nudges the pair 3dp down inside the band (it is centred as one block) for
+ * the same reason. The band itself — the tap target — is unchanged, full width.
  */
 @Composable
 private fun Header(state: UiState, fold: Boolean) {
@@ -381,7 +388,7 @@ private fun Header(state: UiState, fold: Boolean) {
         contentAlignment = Alignment.CenterStart,
     ) {
         Row(
-            modifier = GlanceModifier.fillMaxWidth(),
+            modifier = GlanceModifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 6.dp),
             verticalAlignment = Alignment.Bottom,
         ) {
             Text(
@@ -490,9 +497,10 @@ private fun ItemRow(
     val titleColor = if (stale) StaleColor else TitleColor
     val glyph = if (item.kind == FeedParser.KIND_PROGRESS) R.drawable.ic_progress else R.drawable.ic_headline
     val glyphCd = if (item.kind == FeedParser.KIND_PROGRESS) R.string.cd_progress else R.string.cd_headline
-    // "Tap on an item" (round 3 item 4b/4a): the pre-round behaviour opens the item on
-    // the dashboard through the trampoline; expand-mode instead toggles this row's
-    // inline body via an ActionCallback in this process — no activity, no browser.
+    // "Tap on an item" (round 3 item 4b/4a): the default opens the item in the app
+    // through the trampoline (OpenItemActivity → MainActivity, never a URL since 2.0.1);
+    // expand-mode instead toggles this row's inline body via an ActionCallback in this
+    // process — no activity at all.
     val tapAction = if (expandMode) {
         actionRunCallback<ToggleItemAction>(
             actionParametersOf(ToggleItemAction.KEY_ITEM_ID to item.id)
@@ -584,8 +592,13 @@ private fun ItemRow(
             }
             if (expanded) {
                 // The inline body (round 3 item 4a): markdown stripped to plain text,
-                // clamped to 5 lines. An item the server sent without a body still
-                // answers the tap — an em dash beats a dead-feeling row.
+                // clamped to 5 lines. The server has sent bodies in the widget slice since
+                // 2.0.1 (before that every expanded row read "—", which is what Fred's
+                // first 2.0.0 screenshot showed); the em dash stays for a body that is
+                // genuinely empty, so the row never feels dead. The text is its own tap
+                // target — the item in the app — so expand mode still has a way to the
+                // full item without leaving the widget for a URL. A child click wins over
+                // the row's toggle in RemoteViews, so the title still toggles.
                 Spacer(GlanceModifier.height(4.dp))
                 Text(
                     text = Markdown.strip(item.body).ifEmpty { "—" },
@@ -594,6 +607,12 @@ private fun ItemRow(
                         fontSize = if (fold) 13.5.sp else 13.sp,
                     ),
                     maxLines = 5,
+                    modifier = GlanceModifier.clickable(
+                        actionStartActivity(
+                            Intent(context, OpenItemActivity::class.java)
+                                .putExtra(OpenItemActivity.EXTRA_URL, "$baseUrl/#/flow/i/${item.id}")
+                        )
+                    ),
                 )
             }
         }

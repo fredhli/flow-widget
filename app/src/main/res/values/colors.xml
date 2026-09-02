@@ -2,5 +2,5 @@
 <resources>
     <!-- The Flow module's accent (config.ALL_PROJECTS["flow"] in the dashboard) — the
          launcher icon ground, matching the webapp favicon's flat-accent language. -->
-    <color name="ic_launcher_background">#7C3AED</color>
+    <color name="ic_launcher_background">#2563EB</color>
 </resources>

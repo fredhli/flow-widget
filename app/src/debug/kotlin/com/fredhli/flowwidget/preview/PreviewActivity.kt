@@ -55,8 +55,6 @@ import kotlinx.coroutines.launch
  *          widget box to the pixel) | foldwide (490x493dp, the 5-column grid variant)
  *   font   default|medium|serif — the round-3 "Title font" dropdown (absent = default)
  *   tap    dashboard|expand — the round-3 "Tap on an item" mode (absent = dashboard)
- *   link   dashboard|chrome — the round-3 "Open links with" choice (absent = dashboard;
- *          only OpenItemActivity reads it, so it changes no pixel — seeded for tap tests)
  *   expand <itemId> — pre-expand one row the way a real expand-mode tap would
  *          (marks it read too), so the expanded state can be shot without a touch
  *   now    epoch ms the fixture offsets hang off (default: current time — offsets are
@@ -162,13 +160,12 @@ class PreviewActivity : Activity() {
         // The round-3 settings, seeded on every shot for the same no-residue reason:
         // absent extras = the shipped defaults, not whatever the last run left behind.
         //   --es font default|medium|serif   --es tap dashboard|expand
-        //   --es link dashboard|chrome       --es expand <itemId>
+        //   --es expand <itemId>
         // `expand` pre-opens one row (and, like the real tap, marks it read) so a
         // gallery can shoot the expanded state without driving a touch.
         store.saveSettings(
             WidgetSettings.titleFont(intent.getStringExtra(EXTRA_FONT)),
             WidgetSettings.tapMode(intent.getStringExtra(EXTRA_TAP)),
-            WidgetSettings.linkApp(intent.getStringExtra(EXTRA_LINK)),
         )
         store.clearExpandState() // a previous shot's expanded row must not leak in
         val expandId = intent.getStringExtra(EXTRA_EXPAND)
@@ -278,7 +275,6 @@ class PreviewActivity : Activity() {
         const val EXTRA_BACKDROP = "backdrop"
         const val EXTRA_FONT = "font"
         const val EXTRA_TAP = "tap"
-        const val EXTRA_LINK = "link"
         const val EXTRA_EXPAND = "expand"
     }
 }

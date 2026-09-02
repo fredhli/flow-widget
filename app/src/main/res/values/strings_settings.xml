@@ -11,10 +11,6 @@
          "App info -> Settings" entry and the shortcut's own screen title show. -->
     <string name="settings_title">Dashboard app settings</string>
 
-    <string name="settings_tap_label">Widget taps open</string>
-    <string name="settings_tap_app">The app</string>
-    <string name="settings_tap_browser">The browser</string>
-    <string name="settings_tap_hint">Where a tap on the widget lands. The browser is the pre-2.0 behaviour, kept for when the app is the thing that is broken.</string>
 
     <string name="settings_links_label">External links open in</string>
     <string name="settings_links_chrome">Chrome</string>
@@ -33,7 +29,7 @@
 
     <!-- App version, then the WebView package version the page is actually running on —
          the first thing to ask for when the site behaves differently here than in Chrome. -->
-    <string name="settings_about">Dashboard Flow %1$s · WebView %2$s</string>
+    <string name="settings_about">Dashboard %1$s · WebView %2$s</string>
 
     <!-- Launcher shortcuts (res/xml/shortcuts.xml). Short labels stay under ~10 characters
          so One UI does not ellipsise them in the long-press sheet. -->

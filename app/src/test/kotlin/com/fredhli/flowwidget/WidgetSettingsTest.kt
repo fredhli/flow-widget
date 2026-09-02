@@ -24,8 +24,6 @@ class WidgetSettingsTest {
         assertEquals(WidgetSettings.TAP_DASHBOARD, s.tapMode)
         assertNull(s.expandedId)
         assertTrue(s.readIds.isEmpty())
-        // linkApp is read by OpenItemActivity, not deriveState; same normaliser:
-        assertEquals(WidgetSettings.LINK_DASHBOARD, WidgetSettings.linkApp(null))
     }
 
     @Test
@@ -33,14 +31,12 @@ class WidgetSettingsTest {
         assertEquals(WidgetSettings.FONT_DEFAULT, WidgetSettings.titleFont("comic-sans"))
         assertEquals(WidgetSettings.FONT_DEFAULT, WidgetSettings.titleFont(""))
         assertEquals(WidgetSettings.TAP_DASHBOARD, WidgetSettings.tapMode("explode"))
-        assertEquals(WidgetSettings.LINK_DASHBOARD, WidgetSettings.linkApp("firefox"))
     }
 
     @Test
     fun `valid values pass through untouched`() {
         for (f in WidgetSettings.FONTS) assertEquals(f, WidgetSettings.titleFont(f))
         for (t in WidgetSettings.TAP_MODES) assertEquals(t, WidgetSettings.tapMode(t))
-        for (l in WidgetSettings.LINK_APPS) assertEquals(l, WidgetSettings.linkApp(l))
     }
 
     @Test

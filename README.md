@@ -1,4 +1,4 @@
-# Dashboard Flow — the app and the home-screen widget
+# Dashboard — the app and the Flow home-screen widget
 
 One APK, two things.
 
@@ -14,8 +14,9 @@ an authenticated file, and no way for a widget tap to land in a window that was 
 open. The spec is `docs/APP-SHELL-SPEC.md`; the reasoning behind it is
 `proj_2026/dashboard/ANDROID-APP-PLAN.md`.
 
-So there **is** an app icon now, where there was none through 1.1.1: **Dashboard Flow** in
-the drawer, opening the dashboard. The widget is unchanged — same feed, same look, same
+So there **is** an app icon now, where there was none through 1.1.1: **Dashboard** in the
+drawer (the site's own blue four-tile mark since 2.0.1; 2.0.0 shipped as "Dashboard Flow"
+with the widget's violet glyph), opening the dashboard. The widget is unchanged — same feed, same look, same
 30-minute refresh — and is still added from the widget picker, not from the app.
 
 What 2.0.0 adds, in one list:
@@ -26,9 +27,8 @@ What 2.0.0 adds, in one list:
 - **App Links** for `dashboard.fredhli.com` and `dashboard-chl.fredhli.com` — a dashboard
   link tapped in Messages or Gmail opens here rather than in Chrome, verified against
   `/.well-known/assetlinks.json` on each host.
-- **App settings** (`Dashboard app settings`): where a widget tap goes (the app, default, or
-  the browser), where an off-dashboard link goes (Chrome, default, or a Chrome Custom Tab,
-  or the system default browser), and the page text size (follow the system, or 90 / 100 /
+- **App settings** (`Dashboard app settings`): where an off-dashboard link goes (Chrome,
+  default, or a Chrome Custom Tab, or the system default browser), and the page text size (follow the system, or 90 / 100 /
   115 / 130 %). Plus a button into the widget's own server-and-token screen, and a
   Diagnostics dump for the on-device measurements.
 - **Launcher shortcuts** — long-press the icon for Flow, Morning, JHT, Settings (and Smart
@@ -38,6 +38,19 @@ What 2.0.0 adds, in one list:
   not do at all.
 - `versionCode 5`, `versionName 2.0.0` (1.2.0 was 4), `compileSdk` = `targetSdk` = **36**, `minSdk` still
   31.
+
+What **2.0.1** changes, from the first run of 2.0.0 on the phone:
+
+- **A widget tap always opens the app.** The 2.0.0 "Widget taps open: the app / the browser"
+  switch (and the widget config's "Open links with") is gone — a tap on the phone had landed
+  in the browser, and the app is the phone's dashboard now; the widget never hands out a URL.
+- **Expand mode shows the item's text.** `/api/flow/widget` carries bodies since the matching
+  dashboard change; before it every expanded row read "—". Tapping the expanded text opens
+  the item in the app.
+- The app is named **Dashboard** and wears the dashboard's icon.
+- The header band's "Flow" and the age label sit 16 dp in from the rows' edge — on the
+  centre of the rows' corner circle — and a hair lower.
+- `versionCode 6`, `versionName 2.0.1`.
 
 ```
 this folder
@@ -137,15 +150,7 @@ only. Clearing this folder by hand to "re-publish it clean" throws `design/` awa
      title: markdown stripped to plain text, clamped to 5 lines, that item's unread dot
      cleared. Tap the row again — or any other row — to collapse it. In this mode item
      taps never leave the widget; the header still opens the Flow page.
-   - **Open links with** (round 3) — *Dashboard app* (default) hands links to whatever
-     Android resolves, as before. *Chrome* pins them to Chrome, falling back to the
-     default browser automatically if Chrome is missing or disabled. Applies to the
-     header tap and, in open-dashboard mode, item taps. Worth knowing: this widget
-     setting is the **only** reliable route into full Chrome — links tapped *inside* the
-     installed dashboard app can never escape to Chrome (Chrome refuses intents aimed at
-     itself, unconditionally, since M113), but the widget fires from its own process, so
-     the block does not apply here.
-   Save. The widget fetches immediately. All three dropdowns keep their pre-round-3
+   Save. The widget fetches immediately. Both dropdowns keep their pre-round-3
    behaviour until you change them — an update never changes what taps do behind your back.
 
 **Updating later**: install the new APK over the old one the same way. The config and the
@@ -157,7 +162,7 @@ widget → Remove is not enough; go to Settings → Apps → Flow → Uninstall)
 
 ## The app
 
-Tap **Dashboard Flow** in the drawer. It loads `https://dashboard.fredhli.com` and you are
+Tap **Dashboard** in the drawer. It loads `https://dashboard.fredhli.com` and you are
 already signed in: the shell writes the token you pasted into the widget's config screen
 into the WebView's cookie jar as `dash_session` before the first load, so there is no login
 page and nothing to type. If the config was never saved the app says so and offers the
@@ -169,9 +174,7 @@ There is no address bar and no tab, on purpose. What there is:
   shows five. Each opens that page directly, in the window that is already open if there
   is one.
 - **Settings** → *Dashboard app settings*, also reachable from Android's own
-  Settings → Apps → Dashboard Flow → Settings. Three choices and two doors:
-  - **Widget taps open** — *The app* (default) or *The browser*. The browser option is
-    exactly what 1.1.1 did, kept for the day the shell is the broken thing.
+  Settings → Apps → Dashboard → Settings. Two choices and two doors:
   - **External links open in** — *Chrome* (default), *Chrome Custom Tab* (opens inside the
     app, back arrow returns) or *Default browser*. Only links that leave the dashboard;
     dashboard links stay in the app.
@@ -183,8 +186,8 @@ There is no address bar and no tab, on purpose. What there is:
 - **Back** walks the page's own history, then leaves. **Fold and unfold** keeps the page and
   your scroll position — the activity is not recreated.
 - A **dashboard link tapped anywhere else** (Messages, Gmail) opens here once Android has
-  verified the App Link. If it keeps opening Chrome, check Settings → Apps → Dashboard
-  Flow → *Open by default*, and that
+  verified the App Link. If it keeps opening Chrome, check Settings → Apps → Dashboard →
+  *Open by default*, and that
   `https://dashboard.fredhli.com/.well-known/assetlinks.json` loads without signing in.
 
 ---
@@ -200,21 +203,20 @@ There is no address bar and no tab, on purpose. What there is:
 | **Grey titles** | The newest batch is more than 24 hours old. Nothing is broken; nothing is new either. The same rule greys the web page. |
 | **A small offline mark** | The last fetch failed. What you are reading is the cached batch — the widget never goes blank, it just stops claiming to be current. |
 
-**Taps** (all of it is settings — "Tap on an item" and "Open links with" on the widget
-config screen above; "Open links with" is the same switch as *Dashboard app settings* →
-"Widget taps open", so change it in either place):
+**Taps** (one setting — "Tap on an item" on the widget config screen above; every tap that
+leaves the widget lands in the app, never in a browser, since 2.0.1):
 - an **item** → with "Tap on an item" at its default, opens `#/flow/i/<id>` with that item
-  expanded — in the **app** (the default since 2.0.0: a route pushed into the page if it is
-  already loaded, so a tap while the app sits in the background reloads nothing), or, with
-  "Open links with" set to *Chrome*, the same URL in the browser, signed in by your 90-day
-  session cookie — the widget's token has nothing to do with the browser. Set "Tap on an
-  item" to *Expand in widget* and the same tap instead unfolds the item's text inline
-  (5-line clamp, plain text) and marks it read — tap again to fold it.
+  expanded in the **app** (a route pushed into the page if it is already loaded, so a tap
+  while the app sits in the background reloads nothing). Set "Tap on an item" to *Expand in
+  widget* and the same tap instead unfolds the item's text inline (5-line clamp, plain text)
+  and marks it read — tap again to fold it, or tap the text itself to open the item in the
+  app.
 - the **header band** → opens the Flow page plain. The *whole* band is the target — the
   word "Flow", the empty middle, the age label, and the full 48 dp height of it. There is
   nothing else up there to hit.
-- every link above honours **"Open links with"**: default browser resolution, or pinned
-  to Chrome with an automatic fallback when Chrome isn't there.
+- every tap above lands in the **app** — the widget never hands a URL to a browser
+  (2.0.1). Links that leave the dashboard from inside the app follow *Dashboard app
+  settings* → "External links open in".
 
 **There is no refresh button, on purpose** (amended 2026-09-01). A tap trigger on a home
 screen is a mis-touch magnet, and refreshing is the Flow page's job: start a run from

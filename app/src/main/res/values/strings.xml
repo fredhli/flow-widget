@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Dashboard Flow</string>
+    <string name="app_name">Dashboard</string>
     <string name="widget_description">Flow feed — progress and headlines at a glance.</string>
     <string name="config_title">Flow widget setup</string>
     <string name="config_server_label">Server</string>
@@ -13,9 +13,7 @@
     <string name="config_opacity_value">%1$d%%</string>
     <string name="config_title_font_label">Title font</string>
     <string name="config_tap_mode_label">Tap on an item</string>
-    <string name="config_tap_mode_hint">Expand shows the item’s text inside the widget (and marks it read); Open dashboard opens the item’s page.</string>
-    <string name="config_link_app_label">Open links with</string>
-    <string name="config_link_app_hint">Chrome falls back to the default browser if Chrome is missing or disabled. Applies to the header tap, and to item taps when they open the dashboard.</string>
+    <string name="config_tap_mode_hint">Open dashboard opens the item’s page in the app. Expand shows the item’s text inside the widget (and marks it read); tapping that text opens the item in the app.</string>
     <string name="config_save">Save</string>
     <string name="config_save_anyway">Save anyway (server unreachable)</string>
     <string name="config_checking">Checking…</string>

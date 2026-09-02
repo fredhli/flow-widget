@@ -39,21 +39,6 @@ class ShellPrefsTest {
     }
 
     @Test
-    fun `tap target round trips and falls back to app`() {
-        assertEquals(TapTarget.APP, TapTarget.fromStorage("dashboard"))
-        assertEquals(TapTarget.BROWSER, TapTarget.fromStorage("chrome"))
-        for (target in TapTarget.entries) {
-            assertEquals(target, TapTarget.fromStorage(target.storageValue))
-        }
-        assertEquals(TapTarget.DEFAULT, TapTarget.APP)
-        assertEquals(TapTarget.APP, TapTarget.fromStorage(null))
-        assertEquals(TapTarget.APP, TapTarget.fromStorage(""))
-        assertEquals(TapTarget.APP, TapTarget.fromStorage(" DASHBOARD "))
-        assertEquals(TapTarget.BROWSER, TapTarget.fromStorage("Chrome "))
-        assertEquals(TapTarget.APP, TapTarget.fromStorage("firefox")) // widget side rejects it too
-    }
-
-    @Test
     fun `clamp zoom keeps the system sentinel and pins the rest`() {
         assertEquals(0, ShellPrefs.clampZoom(0))       // 0 is "follow the system", not a percent
         assertEquals(50, ShellPrefs.clampZoom(49))
@@ -89,7 +74,6 @@ class ShellPrefsTest {
     @Test
     fun `the defaults are the ones a 1_1_1 install upgrades into`() {
         val defaults = ShellPrefs()
-        assertEquals(TapTarget.APP, defaults.tapTarget)
         assertEquals(LinkPolicy.CHROME, defaults.linkPolicy)
         assertEquals(ShellPrefs.TEXT_ZOOM_SYSTEM, defaults.textZoom)
     }

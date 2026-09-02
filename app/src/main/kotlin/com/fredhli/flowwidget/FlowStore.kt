@@ -12,7 +12,6 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.fredhli.flowwidget.app.LinkPolicy
 import com.fredhli.flowwidget.app.ShellPrefs
-import com.fredhli.flowwidget.app.TapTarget
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 
@@ -81,24 +80,22 @@ class FlowStore private constructor(private val appContext: Context) {
     suspend fun shellPrefs(): ShellPrefs = shellPrefsFrom(snapshot())
 
     /**
-     * Write all three shell settings at once. The settings screen saves on every tap, so
+     * Write both shell settings at once. The settings screen saves on every tap, so
      * this is a tiny, frequent edit — one `edit` block keeps it one file rewrite instead
-     * of three, and keeps a half-applied state off disk if the process dies mid-save.
+     * of two, and keeps a half-applied state off disk if the process dies mid-save.
      */
     suspend fun saveShellPrefs(prefs: ShellPrefs) {
         appContext.flowDataStore.edit {
-            it[KEY_LINK_APP] = prefs.tapTarget.storageValue
             it[KEY_LINK_POLICY] = prefs.linkPolicy.storageValue
             it[KEY_TEXT_ZOOM] = ShellPrefs.clampZoom(prefs.textZoom)
         }
     }
 
     /** The round-3 behaviour settings, written together from the config screen. */
-    suspend fun saveSettings(titleFont: String, tapMode: String, linkApp: String) {
+    suspend fun saveSettings(titleFont: String, tapMode: String) {
         appContext.flowDataStore.edit {
             it[KEY_TITLE_FONT] = WidgetSettings.titleFont(titleFont)
             it[KEY_TAP_MODE] = WidgetSettings.tapMode(tapMode)
-            it[KEY_LINK_APP] = WidgetSettings.linkApp(linkApp)
         }
     }
 
@@ -154,9 +151,9 @@ class FlowStore private constructor(private val appContext: Context) {
         // reorder the enum, and a preferences file outlives any such promise. An absent or
         // unrecognised value falls back to the default in `fromStorage`, so an install
         // upgraded from 1.2.0 — where these keys do not exist — reads exactly the decided
-        // defaults (links open Chrome, text follows the system). The widget-tap target has
-        // no key of its own: it IS round 3's KEY_LINK_APP below (see TapTarget), read by
-        // OpenItemActivity on every widget tap.
+        // defaults (links open Chrome, text follows the system). 2.0.0 also kept a widget-tap
+        // target under round 3's `link_app` key; since 2.0.1 a widget tap always opens the
+        // app (OpenItemActivity), the key is no longer read, and a stored value is ignored.
 
         /** "chrome" | "custom_tab" | "default_browser"; absent -> chrome. */
         val KEY_LINK_POLICY = stringPreferencesKey("link_policy")
@@ -164,7 +161,7 @@ class FlowStore private constructor(private val appContext: Context) {
         /** WebView text zoom: 0 = follow the system font scale; else a percent 50..200. */
         val KEY_TEXT_ZOOM = intPreferencesKey("text_zoom")
 
-        // The round-3 behaviour settings. All three are ABSENT on an upgraded install,
+        // The round-3 behaviour settings. Both are ABSENT on an upgraded install,
         // and absent means the pre-round-3 behaviour (WidgetSettings normalises to the
         // defaults) — that absence IS the migration, the same shape as KEY_BG_OPACITY's.
 
@@ -173,9 +170,6 @@ class FlowStore private constructor(private val appContext: Context) {
 
         /** What an item tap does: "dashboard" | "expand" (WidgetSettings.TAP_MODES). */
         val KEY_TAP_MODE = stringPreferencesKey("tap_mode")
-
-        /** What opens links: "dashboard" | "chrome" (WidgetSettings.LINK_APPS). */
-        val KEY_LINK_APP = stringPreferencesKey("link_app")
 
         /** The one row whose body is expanded inline, or absent. Expand-mode only. */
         val KEY_EXPANDED_ID = stringPreferencesKey("expanded_id")
@@ -206,7 +200,6 @@ class FlowStore private constructor(private val appContext: Context) {
          * suspend point that could observe a different moment than the config did.
          */
         fun shellPrefsFrom(prefs: Preferences): ShellPrefs = ShellPrefs(
-            tapTarget = TapTarget.fromStorage(prefs[KEY_LINK_APP]),
             linkPolicy = LinkPolicy.fromStorage(prefs[KEY_LINK_POLICY]),
             textZoom = ShellPrefs.clampZoom(prefs[KEY_TEXT_ZOOM] ?: ShellPrefs.TEXT_ZOOM_SYSTEM),
         )
