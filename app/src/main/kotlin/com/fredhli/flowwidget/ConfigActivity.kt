@@ -8,6 +8,7 @@ import android.view.View
 import android.widget.Button
 import android.widget.EditText
 import android.widget.SeekBar
+import android.widget.Spinner
 import android.widget.TextView
 import androidx.glance.appwidget.updateAll
 import java.net.MalformedURLException
@@ -34,6 +35,9 @@ class ConfigActivity : Activity() {
     private lateinit var lightValue: TextView
     private lateinit var darkBar: SeekBar
     private lateinit var darkValue: TextView
+    private lateinit var fontSpinner: Spinner
+    private lateinit var tapSpinner: Spinner
+    private lateinit var linkSpinner: Spinner
     private lateinit var errorView: TextView
     private lateinit var saveButton: Button
     private lateinit var saveAnywayButton: Button
@@ -54,6 +58,9 @@ class ConfigActivity : Activity() {
         lightValue = findViewById(R.id.opacity_value_light)
         darkBar = findViewById(R.id.opacity_dark)
         darkValue = findViewById(R.id.opacity_value_dark)
+        fontSpinner = findViewById(R.id.title_font)
+        tapSpinner = findViewById(R.id.tap_mode)
+        linkSpinner = findViewById(R.id.link_app)
         errorView = findViewById(R.id.error)
         saveButton = findViewById(R.id.save)
         saveAnywayButton = findViewById(R.id.save_anyway)
@@ -79,6 +86,20 @@ class ConfigActivity : Activity() {
             GlassSurface.DARK_LEVELS,
             GlassSurface.darkLevelFor(prefs[FlowStore.KEY_BG_OPACITY_DARK]),
         ) { GlassSurface.darkOpacityAtLevel(it) }
+
+        // The round-3 dropdowns. Spinner entries come from arrays.xml, INDEX-ALIGNED
+        // with the WidgetSettings lists, so position <-> stored string is a plain index
+        // map in both directions. Absent (or junk) stored values select the default —
+        // position 0 in all three lists — which is the pre-round-3 behaviour.
+        fontSpinner.setSelection(
+            WidgetSettings.FONTS.indexOf(WidgetSettings.titleFont(prefs[FlowStore.KEY_TITLE_FONT]))
+        )
+        tapSpinner.setSelection(
+            WidgetSettings.TAP_MODES.indexOf(WidgetSettings.tapMode(prefs[FlowStore.KEY_TAP_MODE]))
+        )
+        linkSpinner.setSelection(
+            WidgetSettings.LINK_APPS.indexOf(WidgetSettings.linkApp(prefs[FlowStore.KEY_LINK_APP]))
+        )
 
         saveButton.setOnClickListener { attempt(requireFetch = true) }
         saveAnywayButton.setOnClickListener { attempt(requireFetch = false) }
@@ -131,10 +152,13 @@ class ConfigActivity : Activity() {
 
         setBusy(true)
         val finalBase = base
-        // Read both sliders on the UI thread; saved with the config in both paths and
+        // Read every control on the UI thread; saved with the config in both paths and
         // applied by the updateAll below — "live on save".
         val lightOpacity = GlassSurface.lightOpacityAtLevel(lightBar.progress)
         val darkOpacity = GlassSurface.darkOpacityAtLevel(darkBar.progress)
+        val titleFont = WidgetSettings.FONTS.getOrElse(fontSpinner.selectedItemPosition) { WidgetSettings.FONT_DEFAULT }
+        val tapMode = WidgetSettings.TAP_MODES.getOrElse(tapSpinner.selectedItemPosition) { WidgetSettings.TAP_DASHBOARD }
+        val linkApp = WidgetSettings.LINK_APPS.getOrElse(linkSpinner.selectedItemPosition) { WidgetSettings.LINK_DASHBOARD }
         Thread {
             try {
                 val store = FlowStore.get(this)
@@ -144,12 +168,14 @@ class ConfigActivity : Activity() {
                     runBlocking {
                         store.saveConfig(finalBase, token)
                         store.saveOpacity(lightOpacity, darkOpacity)
+                        store.saveSettings(titleFont, tapMode, linkApp)
                         store.saveFeed(body)
                     }
                 } else {
                     runBlocking {
                         store.saveConfig(finalBase, token)
                         store.saveOpacity(lightOpacity, darkOpacity)
+                        store.saveSettings(titleFont, tapMode, linkApp)
                     }
                     FlowWork.fetchNow(this)
                 }

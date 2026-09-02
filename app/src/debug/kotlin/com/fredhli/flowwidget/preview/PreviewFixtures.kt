@@ -77,8 +77,20 @@ object PreviewFixtures {
     /** Unread fixture: everything newer than 90 min ago carries the dot (3 of 6 items). */
     const val UNREAD_LAST_OPEN_AGE_MIN = 90L
 
-    /** Deterministic items: id, title, age in minutes behind `now`, kind. */
-    data class FixtureItem(val id: String, val title: String, val ageMin: Long, val kind: String)
+    /**
+     * Deterministic items: id, title, age in minutes behind `now`, kind — and since
+     * round 3 an optional markdown-ish `body`, the text the expand-in-widget tap mode
+     * strips and shows inline. Bodies deliberately carry the markup FLOW_SPEC batches
+     * really use (bold, links, list lines) so an expanded gallery frame proves the
+     * stripper, not just the layout.
+     */
+    data class FixtureItem(
+        val id: String,
+        val title: String,
+        val ageMin: Long,
+        val kind: String,
+        val body: String? = null,
+    )
 
     /**
      * Chinese since the device-feedback round: the live feed IS 中文 (flow/FLOW_SPEC.md),
@@ -89,11 +101,24 @@ object PreviewFixtures {
      * unchanged so the unread/stale assertions hold.
      */
     val ITEMS = listOf(
-        FixtureItem("fx01", "彭博 500 指数九月重构纳入十只新股，9 月 10 日开盘前生效", 32, "headline"),
-        FixtureItem("fx02", "美联储九月按兵不动预期升温，两年期美债收益率回落", 47, "headline"),
-        FixtureItem("fx03", "JHT 夜间抓取完成：128 个会话已对账，无 70 分以上新帖", 63, "progress"),
+        FixtureItem(
+            "fx01", "彭博 500 指数九月重构纳入十只新股，9 月 10 日开盘前生效", 32, "headline",
+            body = "**重构规模**为近三年最大：十只新股合计权重约 1.2%，[官方公告](https://example.com/bbg500) 列出完整名单。\n" +
+                "- 生效时点：9 月 10 日开盘前\n- 被动跟踪资金预估调仓 38 亿美元",
+        ),
+        FixtureItem(
+            "fx02", "美联储九月按兵不动预期升温，两年期美债收益率回落", 47, "headline",
+            body = "期货市场对九月降息的定价回落至 *18%*，两年期收益率单日下行 6bp。`CME FedWatch` 口径。",
+        ),
+        FixtureItem(
+            "fx03", "JHT 夜间抓取完成：128 个会话已对账，无 70 分以上新帖", 63, "progress",
+            body = "## 摘要\n对账通过 128/128，抓取窗口 02:00–04:30，无新增高分帖。",
+        ),
         FixtureItem("fx04", "日元套息交易再度平仓，动量因子单日回撤 1.8%", 128, "headline"),
-        FixtureItem("fx05", "Cockpit 部署 41 秒转绿，WSL 入口连续运行 96 小时", 190, "progress"),
+        FixtureItem(
+            "fx05", "Cockpit 部署 41 秒转绿，WSL 入口连续运行 96 小时", 190, "progress",
+            body = "部署 41s 转绿；`fr-wsl-vpn` 入口连续在线 96h，无重启记录。",
+        ),
         FixtureItem("fx06", "新加坡 EP 薪资门槛明年一月上调，指数编制岗不受影响", 300, "headline"),
     )
 
@@ -139,6 +164,10 @@ object PreviewFixtures {
     /** The same instant as absolute epoch SECONDS — the shape the server's `epoch` carries. */
     fun epochAgo(nowMs: Long, ageMin: Long): Long = (nowMs - ageMin * 60_000L) / 1000L
 
+    /** Minimal JSON string escaping for the hand-built fixture bodies (quotes, backslashes, newlines). */
+    fun jsonEscape(s: String): String =
+        s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n")
+
     /**
      * The fixture feed body: [ITEMS] shifted [extraAgeMin] further into the past,
      * `latest` = the newest item's stamp. JSON built by hand so this stays dependency-free;
@@ -159,7 +188,8 @@ object PreviewFixtures {
         val latest = stampAgo(nowMs, FRESH_AGE_MIN + extraAgeMin, zone)
         val latestEpoch = epochAgo(nowMs, FRESH_AGE_MIN + extraAgeMin)
         val items = if (empty) "" else source.joinToString(",") {
-            """{"id":"${it.id}","title":"${it.title.replace("\"", "\\\"")}","ts":"${stampAgo(nowMs, it.ageMin + extraAgeMin, zone)}","epoch":${epochAgo(nowMs, it.ageMin + extraAgeMin)},"kind":"${it.kind}"}"""
+            val body = it.body?.let { b -> ""","body":"${jsonEscape(b)}"""" } ?: ""
+            """{"id":"${it.id}","title":"${jsonEscape(it.title)}","ts":"${stampAgo(nowMs, it.ageMin + extraAgeMin, zone)}","epoch":${epochAgo(nowMs, it.ageMin + extraAgeMin)},"kind":"${it.kind}"$body}"""
         }
         return """{"latest":${if (empty) "null" else "\"$latest\""},"latest_epoch":${if (empty) "null" else "$latestEpoch"},"refreshing":$refreshing,"items":[$items]}"""
     }

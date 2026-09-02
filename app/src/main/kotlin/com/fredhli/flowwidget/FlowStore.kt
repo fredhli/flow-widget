@@ -63,6 +63,37 @@ class FlowStore private constructor(private val appContext: Context) {
         appContext.flowDataStore.edit { it[KEY_LAST_OPEN] = nowMillis }
     }
 
+    /** The round-3 behaviour settings, written together from the config screen. */
+    suspend fun saveSettings(titleFont: String, tapMode: String, linkApp: String) {
+        appContext.flowDataStore.edit {
+            it[KEY_TITLE_FONT] = WidgetSettings.titleFont(titleFont)
+            it[KEY_TAP_MODE] = WidgetSettings.tapMode(tapMode)
+            it[KEY_LINK_APP] = WidgetSettings.linkApp(linkApp)
+        }
+    }
+
+    /**
+     * Expand-mode row tap (round 3 item 4a): toggle the inline body for [id] — tapping
+     * the expanded row again, or any other row, collapses it — and mark that item read.
+     * The read mark stays even when the tap collapses the row: the body was shown once,
+     * which is what "read" means here.
+     */
+    /** Collapse any expanded row and forget the per-item read marks (seed/reset hygiene). */
+    suspend fun clearExpandState() {
+        appContext.flowDataStore.edit {
+            it.remove(KEY_EXPANDED_ID)
+            it.remove(KEY_READ_IDS)
+        }
+    }
+
+    suspend fun toggleExpanded(id: String) {
+        appContext.flowDataStore.edit {
+            if (it[KEY_EXPANDED_ID] == id) it.remove(KEY_EXPANDED_ID)
+            else it[KEY_EXPANDED_ID] = id
+            it[KEY_READ_IDS] = WidgetSettings.addReadId(it[KEY_READ_IDS], id)
+        }
+    }
+
     companion object {
         val KEY_BASE_URL = stringPreferencesKey("base_url")
         val KEY_TOKEN = stringPreferencesKey("token")
@@ -87,6 +118,25 @@ class FlowStore private constructor(private val appContext: Context) {
 
         /** Dark-theme glass opacity (GlassSurface.MIN_OPACITY_DARK..MAX); absent -> default. */
         val KEY_BG_OPACITY_DARK = floatPreferencesKey("bg_opacity_dark")
+
+        // The round-3 behaviour settings. All three are ABSENT on an upgraded install,
+        // and absent means the pre-round-3 behaviour (WidgetSettings normalises to the
+        // defaults) — that absence IS the migration, the same shape as KEY_BG_OPACITY's.
+
+        /** Row-title font: "default" | "medium" | "serif" (WidgetSettings.FONTS). */
+        val KEY_TITLE_FONT = stringPreferencesKey("title_font")
+
+        /** What an item tap does: "dashboard" | "expand" (WidgetSettings.TAP_MODES). */
+        val KEY_TAP_MODE = stringPreferencesKey("tap_mode")
+
+        /** What opens links: "dashboard" | "chrome" (WidgetSettings.LINK_APPS). */
+        val KEY_LINK_APP = stringPreferencesKey("link_app")
+
+        /** The one row whose body is expanded inline, or absent. Expand-mode only. */
+        val KEY_EXPANDED_ID = stringPreferencesKey("expanded_id")
+
+        /** Newline-joined ids marked read by expanding (WidgetSettings.decodeReadIds). */
+        val KEY_READ_IDS = stringPreferencesKey("read_ids")
 
         const val DEFAULT_BASE_URL = "https://dashboard.fredhli.com"
 

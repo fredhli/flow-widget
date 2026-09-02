@@ -11,6 +11,11 @@
     <string name="config_opacity_label_dark">Background opacity — Dark</string>
     <string name="config_opacity_hint">How solid the widget background is over the wallpaper, one slider per theme. Light spans 50–95%; dark spans 30–95% — lower shows more wallpaper through the night surface, so drag it back up if titles wash out on a bright wallpaper.</string>
     <string name="config_opacity_value">%1$d%%</string>
+    <string name="config_title_font_label">Title font</string>
+    <string name="config_tap_mode_label">Tap on an item</string>
+    <string name="config_tap_mode_hint">Expand shows the item’s text inside the widget (and marks it read); Open dashboard opens the item’s page.</string>
+    <string name="config_link_app_label">Open links with</string>
+    <string name="config_link_app_hint">Chrome falls back to the default browser if Chrome is missing or disabled. Applies to the header tap, and to item taps when they open the dashboard.</string>
     <string name="config_save">Save</string>
     <string name="config_save_anyway">Save anyway (server unreachable)</string>
     <string name="config_checking">Checking…</string>

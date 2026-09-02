@@ -13,11 +13,13 @@ import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.TextView
 import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.dp
 import androidx.glance.ExperimentalGlanceApi
 import androidx.glance.appwidget.compose
 import com.fredhli.flowwidget.FlowStore
 import com.fredhli.flowwidget.FlowWidget
 import com.fredhli.flowwidget.GlassSurface
+import com.fredhli.flowwidget.WidgetSettings
 import java.time.ZoneId
 import kotlin.math.roundToInt
 import kotlinx.coroutines.CoroutineScope
@@ -48,6 +50,15 @@ import kotlinx.coroutines.launch
  *   state  unconfigured|loading|normal|offline|stale|unread|refreshing|empty|unreachable
  *          |short  (a one-line-title batch — the compact bucket's row-height probe)
  *   size   4x2 (250x110dp bucket) | 4x3 (250x180dp bucket)
+ *          | fold (397x399dp — the Fold 8 cover cell measured off the round-3 reference
+ *          shots; on the 420dpi foldcover AVD this frames 1042x1048px, the reference
+ *          widget box to the pixel) | foldwide (490x493dp, the 5-column grid variant)
+ *   font   default|medium|serif — the round-3 "Title font" dropdown (absent = default)
+ *   tap    dashboard|expand — the round-3 "Tap on an item" mode (absent = dashboard)
+ *   link   dashboard|chrome — the round-3 "Open links with" choice (absent = dashboard;
+ *          only OpenItemActivity reads it, so it changes no pixel — seeded for tap tests)
+ *   expand <itemId> — pre-expand one row the way a real expand-mode tap would
+ *          (marks it read too), so the expanded state can be shot without a touch
  *   now    epoch ms the fixture offsets hang off (default: current time — offsets are
  *          fixed, so the rendered text is stable either way)
  *   dark   best-effort per-app night mode; the script prefers `cmd uimode night yes|no`
@@ -103,8 +114,16 @@ class PreviewActivity : Activity() {
         val size: DpSize = when (sizeSpec) {
             "4x3" -> FlowWidget.TALL
             "4x2" -> FlowWidget.COMPACT
+            // The Fold 8 cover cells, measured off design/round3/fold-cover-110pct-*.jpg
+            // at 2.625 px/dp: on this 420dpi 1248x1972 AVD, `fold` renders the widget at
+            // 1042x1048 px — the reference shots' widget box to the pixel, so a gallery
+            // frame lays over the phone screenshot 1:1. `foldwide` is the 5-column grid
+            // variant (same px box on the phone, more dp, smaller render). Both exceed
+            // FlowWidget.FOLD's 340dp width threshold, which is the point.
+            "fold" -> DpSize(397.dp, 399.dp)
+            "foldwide" -> DpSize(490.dp, 493.dp)
             else -> {
-                Log.e(TAG, "FAILED unknown size '$sizeSpec' (want 4x2|4x3)")
+                Log.e(TAG, "FAILED unknown size '$sizeSpec' (want 4x2|4x3|fold|foldwide)")
                 finish(); return
             }
         }
@@ -140,6 +159,20 @@ class PreviewActivity : Activity() {
             intent.getFloatExtra(EXTRA_OPACITY, GlassSurface.DEFAULT_OPACITY),
             intent.getFloatExtra(EXTRA_OPACITY_DARK, GlassSurface.DEFAULT_OPACITY_DARK),
         )
+        // The round-3 settings, seeded on every shot for the same no-residue reason:
+        // absent extras = the shipped defaults, not whatever the last run left behind.
+        //   --es font default|medium|serif   --es tap dashboard|expand
+        //   --es link dashboard|chrome       --es expand <itemId>
+        // `expand` pre-opens one row (and, like the real tap, marks it read) so a
+        // gallery can shoot the expanded state without driving a touch.
+        store.saveSettings(
+            WidgetSettings.titleFont(intent.getStringExtra(EXTRA_FONT)),
+            WidgetSettings.tapMode(intent.getStringExtra(EXTRA_TAP)),
+            WidgetSettings.linkApp(intent.getStringExtra(EXTRA_LINK)),
+        )
+        store.clearExpandState() // a previous shot's expanded row must not leak in
+        val expandId = intent.getStringExtra(EXTRA_EXPAND)
+        if (expandId != null) store.toggleExpanded(expandId)
 
         // 2. Compose the real widget at the exact bucket size. compose() runs the real
         //    provideGlance (fresh DataStore snapshot included) against a fake appwidget
@@ -243,5 +276,9 @@ class PreviewActivity : Activity() {
         const val EXTRA_OPACITY = "opacity"
         const val EXTRA_OPACITY_DARK = "opacity_dark"
         const val EXTRA_BACKDROP = "backdrop"
+        const val EXTRA_FONT = "font"
+        const val EXTRA_TAP = "tap"
+        const val EXTRA_LINK = "link"
+        const val EXTRA_EXPAND = "expand"
     }
 }
