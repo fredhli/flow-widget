@@ -59,6 +59,8 @@ What **2.0.1** changes, from the first run of 2.0.0 on the phone:
 this folder
 ├── README.md          you are here                          ← lives only here
 ├── DESIGN-NOTES.md    the design findings and their status  ← lives only here
+├── docs/              STATUS.md (where widget and app stand — read first),
+│                      APP-SHELL-SPEC.md, MERGE-NOTES.md (per-round record)
 ├── design/            the reference photo, the brief and what the redesign
 │                      round settled, the research, the mockups  ← lives only here
 ├── screenshots/       <name>-<date>/ — every state, size and theme from the

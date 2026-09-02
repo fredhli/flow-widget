@@ -36,6 +36,10 @@ Nothing here is a bug in the sense of "broken". The widget passed every function
 are places where the visual design and a guideline disagreed, or where the layout did
 something the plan did not predict.
 
+**Status pointer (2026-09-02):** what shipped and what is next for the widget AND the app
+lives in `docs/STATUS.md`; this file stays the record of the design findings below.
+The widget is debugged at the Fold 8 cover width only (`foldcover` AVD, `GROUND=fold8`).
+
 ## At a glance
 
 | # | Finding | Status |
