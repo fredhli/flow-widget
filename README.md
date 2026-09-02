@@ -36,7 +36,7 @@ What 2.0.0 adds, in one list:
 - Files: an authenticated `/api/…` document — a generated CV, a raw brief — is fetched with
   the session cookie and handed to a viewer or the share sheet, which a browser tab could
   not do at all.
-- `versionCode 4`, `versionName 2.0.0`, `compileSdk` = `targetSdk` = **36**, `minSdk` still
+- `versionCode 5`, `versionName 2.0.0` (1.2.0 was 4), `compileSdk` = `targetSdk` = **36**, `minSdk` still
   31.
 
 ```
