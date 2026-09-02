@@ -90,6 +90,8 @@ object PreviewFixtures {
         val ageMin: Long,
         val kind: String,
         val body: String? = null,
+        val topic: String? = null,
+        val source: String? = null,
     )
 
     /**
@@ -103,23 +105,27 @@ object PreviewFixtures {
     val ITEMS = listOf(
         FixtureItem(
             "fx01", "彭博 500 指数九月重构纳入十只新股，9 月 10 日开盘前生效", 32, "headline",
+            topic = "Index-ETF", source = "Bloomberg",
             body = "**重构规模**为近三年最大：十只新股合计权重约 1.2%，[官方公告](https://example.com/bbg500) 列出完整名单。\n" +
                 "- 生效时点：9 月 10 日开盘前\n- 被动跟踪资金预估调仓 38 亿美元",
         ),
         FixtureItem(
             "fx02", "美联储九月按兵不动预期升温，两年期美债收益率回落", 47, "headline",
+            topic = "Macro", source = "Reuters",
             body = "期货市场对九月降息的定价回落至 *18%*，两年期收益率单日下行 6bp。`CME FedWatch` 口径。",
         ),
         FixtureItem(
             "fx03", "JHT 夜间抓取完成：128 个会话已对账，无 70 分以上新帖", 63, "progress",
+            source = "jht",
             body = "## 摘要\n对账通过 128/128，抓取窗口 02:00–04:30，无新增高分帖。",
         ),
-        FixtureItem("fx04", "日元套息交易再度平仓，动量因子单日回撤 1.8%", 128, "headline"),
+        FixtureItem("fx04", "日元套息交易再度平仓，动量因子单日回撤 1.8%", 128, "headline", topic = "Quant", source = "FT"),
         FixtureItem(
             "fx05", "Cockpit 部署 41 秒转绿，WSL 入口连续运行 96 小时", 190, "progress",
+            source = "smart-beta",
             body = "部署 41s 转绿；`fr-wsl-vpn` 入口连续在线 96h，无重启记录。",
         ),
-        FixtureItem("fx06", "新加坡 EP 薪资门槛明年一月上调，指数编制岗不受影响", 300, "headline"),
+        FixtureItem("fx06", "新加坡 EP 薪资门槛明年一月上调，指数编制岗不受影响", 300, "headline"),   // no chips: the pre-chip fallback
     )
 
     /**
@@ -189,7 +195,9 @@ object PreviewFixtures {
         val latestEpoch = epochAgo(nowMs, FRESH_AGE_MIN + extraAgeMin)
         val items = if (empty) "" else source.joinToString(",") {
             val body = it.body?.let { b -> ""","body":"${jsonEscape(b)}"""" } ?: ""
-            """{"id":"${it.id}","title":"${jsonEscape(it.title)}","ts":"${stampAgo(nowMs, it.ageMin + extraAgeMin, zone)}","epoch":${epochAgo(nowMs, it.ageMin + extraAgeMin)},"kind":"${it.kind}"$body}"""
+            val chips = (it.topic?.let { t -> ""","topic":"${jsonEscape(t)}"""" } ?: "") +
+                (it.source?.let { s -> ""","source":"${jsonEscape(s)}"""" } ?: "")
+            """{"id":"${it.id}","title":"${jsonEscape(it.title)}","ts":"${stampAgo(nowMs, it.ageMin + extraAgeMin, zone)}","epoch":${epochAgo(nowMs, it.ageMin + extraAgeMin)},"kind":"${it.kind}"$body$chips}"""
         }
         return """{"latest":${if (empty) "null" else "\"$latest\""},"latest_epoch":${if (empty) "null" else "$latestEpoch"},"refreshing":$refreshing,"items":[$items]}"""
     }

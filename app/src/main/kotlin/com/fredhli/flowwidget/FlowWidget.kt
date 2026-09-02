@@ -269,13 +269,27 @@ internal fun bodyMode(state: UiState): BodyMode = when {
 }
 
 /**
- * The row's meta line ("progress · 1 h"): kind word + relative age. There is no source
- * field in the feed (FeedItem is id/title/ts/kind), so the kind word stands where the
- * mockup shows a source. Pure so it is testable off-device.
+ * The row's meta line ("Quant · HKEX · 5h"): the page's two chips — topic, then source —
+ * and the relative age. Fred's first run of 2.0.0: the page showed "Quant HKEX" under a
+ * title where the widget showed only "headline", so since 2.0.1 the chips lead and the
+ * kind word is the fallback for an item that has neither (an older payload; the glyph
+ * already says headline/progress). A module-key source is spelled the way flow.js spells
+ * it ([sourceLabel]). Pure so it is testable off-device.
  */
 internal fun metaLine(item: FeedItem, nowMs: Long): String {
-    val ts = item.epochMs ?: RelativeAge.parseTs(item.ts) ?: return item.kind
-    return "${item.kind} · ${RelativeAge.format(ts, nowMs)}"
+    val chips = listOfNotNull(item.topic, item.source?.let(::sourceLabel))
+        .filter { it.isNotBlank() }
+    val head = if (chips.isEmpty()) item.kind else chips.joinToString(" · ")
+    val ts = item.epochMs ?: RelativeAge.parseTs(item.ts) ?: return head
+    return "$head · ${RelativeAge.format(ts, nowMs)}"
+}
+
+/** flow.js's SOURCES map: a progress item's module key, spelled for a reader. */
+internal fun sourceLabel(source: String): String = when (source) {
+    "jht" -> "JHT"
+    "smart-beta" -> "Smart Beta"
+    "morning" -> "Morning"
+    else -> source
 }
 
 // ------------------------------------------------------------------ layout

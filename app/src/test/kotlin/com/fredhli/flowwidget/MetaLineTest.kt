@@ -7,9 +7,10 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
- * The tall bucket's row meta line: "kind · relative age". The feed has no source field,
- * so the kind word stands where the mockup shows a source; the age half shares its stem
- * with the header's "ago" label, so the two never spell the same duration two ways.
+ * The tall bucket's row meta line: "topic · source · relative age" since 2.0.1, with the
+ * kind word standing in when an item carries neither chip (older payloads); the age half
+ * shares its stem with the header's "ago" label, so the two never spell the same duration
+ * two ways.
  */
 class MetaLineTest {
 
@@ -18,8 +19,28 @@ class MetaLineTest {
     private fun stampAgo(ageMs: Long): String =
         LocalDateTime.ofInstant(Instant.ofEpochMilli(now - ageMs), ZoneId.systemDefault()).toString()
 
-    private fun item(ts: String?, kind: String = "headline", epochMs: Long? = null) =
-        FeedItem(id = "fx01", title = "a title", ts = ts, kind = kind, epochMs = epochMs)
+    private fun item(
+        ts: String?,
+        kind: String = "headline",
+        epochMs: Long? = null,
+        topic: String? = null,
+        source: String? = null,
+    ) = FeedItem(id = "fx01", title = "a title", ts = ts, kind = kind, epochMs = epochMs, topic = topic, source = source)
+
+    @Test
+    fun `the page's two chips lead the meta line and the kind word is only the fallback`() {
+        val ago = stampAgo(5 * 60 * 60_000L)
+        assertEquals("Quant · HKEX · 5h", metaLine(item(ago, topic = "Quant", source = "HKEX"), now))
+        assertEquals("HKEX · 5h", metaLine(item(ago, source = "HKEX"), now))
+        assertEquals("Quant · 5h", metaLine(item(ago, topic = "Quant"), now))
+        assertEquals("Quant · HKEX", metaLine(item(null, topic = "Quant", source = "HKEX"), now))
+        // blank chips are no chips
+        assertEquals("headline · 5h", metaLine(item(ago, topic = " ", source = ""), now))
+        // a progress item's module key is spelled the way the page spells it
+        assertEquals("JHT · 5h", metaLine(item(ago, kind = "progress", source = "jht"), now))
+        assertEquals("Smart Beta · 5h", metaLine(item(ago, kind = "progress", source = "smart-beta"), now))
+        assertEquals("Morning · 5h", metaLine(item(ago, kind = "progress", source = "morning"), now))
+    }
 
     @Test
     fun `kind and relative age joined with a middle dot`() {

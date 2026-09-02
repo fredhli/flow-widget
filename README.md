@@ -47,6 +47,9 @@ What **2.0.1** changes, from the first run of 2.0.0 on the phone:
 - **Expand mode shows the item's text.** `/api/flow/widget` carries bodies since the matching
   dashboard change; before it every expanded row read "—". Tapping the expanded text opens
   the item in the app.
+- **The row's meta line shows the page's chips.** "Quant · HKEX · 5h" where 2.0.0 showed
+  "headline · 5h" — the topic and source the Flow page draws under a title, then the age;
+  the kind word only stands in for an item that carries neither.
 - The app is named **Dashboard** and wears the dashboard's icon.
 - The header band's "Flow" and the age label sit 16 dp in from the rows' edge — on the
   centre of the rows' corner circle — and a hair lower.
@@ -199,6 +202,7 @@ There is no address bar and no tab, on purpose. What there is:
 | **The wallpaper, faintly, through the widget** | By design. The surface is a soft grey → blue → grey gradient in light and a deep navy → violet one in dark, each at its own slider's opacity (74% default, see above), not a solid card. It is *not* frosted glass: a third-party widget cannot blur what is behind it — only the launcher can, which is why Bixby can and this cannot. Legibility comes from the rows' own fill in light mode, and from the surface's own density in dark, where a white row fill would push the row towards the light text rather than away from it — which is also why the dark slider is the one to raise if a bright wallpaper washes the titles. |
 | **Flow … 32min ago** | The newest batch landed 32 minutes ago — computed from the server's absolute `epoch` stamp since 2026-09-01, so it is right in the phone's own timezone (the old build parsed the server's naive European-local string and ran hours off on HKT). The age sits at the right end of the header band, always as a whole unit — `32min ago`, `3h ago`, `1d ago`, `just now` — never a clock time and never a fraction. |
 | **`updating…` where the age normally is** | A run is in flight, started from the Flow page on the web. The widget has no refresh button of its own (see **Taps**), so this is the only way it appears; it reverts to the age when the run lands. |
+| **Quant · HKEX · 5h** under a title | The two chips the Flow page draws under the same item — what it is about, where it came from — and how long ago the batch landed (2.0.1; before that the line read `headline · 5h`). A progress item shows its module: `JHT · 1h`. |
 | **A small dot beside a title** | That item arrived since you last tapped the list. Tapping any item clears the dots. |
 | **Grey titles** | The newest batch is more than 24 hours old. Nothing is broken; nothing is new either. The same rule greys the web page. |
 | **A small offline mark** | The last fetch failed. What you are reading is the cached batch — the widget never goes blank, it just stops claiming to be current. |

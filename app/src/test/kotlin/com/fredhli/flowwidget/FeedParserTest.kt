@@ -29,6 +29,17 @@ class FeedParserTest {
     """.trimIndent()
 
     @Test
+    fun `topic and source ride along and blank ones are absent`() {
+        val feed = FeedParser.parse("""{"latest":null,"refreshing":false,"items":[
+            {"id":"a","title":"t","kind":"headline","topic":"Quant","source":"HKEX"},
+            {"id":"b","title":"t","kind":"progress","topic":null,"source":"jht"},
+            {"id":"c","title":"t","kind":"headline","topic":"  ","source":""},
+            {"id":"d","title":"t","kind":"headline"}]}""")
+        assertEquals(listOf("Quant", null, null, null), feed.items.map { it.topic })
+        assertEquals(listOf("HKEX", "jht", null, null), feed.items.map { it.source })
+    }
+
+    @Test
     fun `parses the live payload shape`() {
         val feed = FeedParser.parse(full)
         assertEquals("2026-09-01T18:19:00", feed.latest)

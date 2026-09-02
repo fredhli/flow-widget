@@ -1071,6 +1071,11 @@ Fred installed 2.0.0 on the Fold and sent one screenshot and four items. What ch
    `~/flow-widget-support/gen-launcher-icon.py`; the splash follows automatically.
 4. **Header inset**: "Flow" and the age label sit 16dp in from the container padding (the
    rows' corner radius, i.e. on the corner circle's centre) and 3dp lower.
+5. **The meta line shows the page's chips** (Fred's follow-up, same day): the Flow page
+   draws `topic` + `source` ("Quant HKEX") under a title, the widget said "headline". The
+   widget slice now carries both; `metaLine` is "Quant · HKEX · 5h", the kind word only the
+   fallback for an item with neither, and a module-key source is spelled as flow.js
+   spells it (`sourceLabel`: jht → JHT, smart-beta → Smart Beta, morning → Morning).
 
 Rule recorded in dashboard/CLAUDE.md: the app is the phone's front door and the browser is
 the PC's, both stay, so a site UI/UX change is verified in the app too.

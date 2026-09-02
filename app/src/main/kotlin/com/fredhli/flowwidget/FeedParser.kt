@@ -23,6 +23,14 @@ data class FeedItem(
      * side plausibly ships — so a server-side rename doesn't silently empty the feature.
      */
     val body: String? = null,
+    /**
+     * The page's two chips under a title (2.0.1): what the item is ABOUT ("Quant",
+     * "Index-ETF" — the writer's fixed vocabulary) and where it came from ("HKEX", or a
+     * module key like "jht" for progress). Both optional: older payloads and servers
+     * carry neither, and the meta line falls back to the kind word.
+     */
+    val topic: String? = null,
+    val source: String? = null,
 )
 
 /** The `/api/flow/widget` payload: the newest batch only. */
@@ -72,6 +80,8 @@ object FeedParser {
                         kind = optString(o, "kind") ?: KIND_HEADLINE,
                         epochMs = optEpochMs(o, "epoch"),
                         body = optString(o, "body") ?: optString(o, "summary"),
+                        topic = optString(o, "topic")?.takeIf { it.isNotBlank() },
+                        source = optString(o, "source")?.takeIf { it.isNotBlank() },
                     )
                 )
             }
